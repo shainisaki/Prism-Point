@@ -491,7 +491,7 @@ func _pause_card(parent: Node, title: String, detail: String, action: Callable, 
 	button.add_theme_stylebox_override("normal", _style(Color("142631"), color.darkened(0.55), 8, 12))
 	button.add_theme_stylebox_override("hover", _style(Color("1c3543"), color, 8, 12))
 
-func shop_screen() -> void:
+func shop_screen(purchased_upgrade: String = "") -> void:
 	var focus = "Erster Kauf bestimmt deinen Build" if game.focus == "" else "BUILD: %s · passende Upgrades −20%%" % game.BUILD_NAMES[game.focus]
 	var box = _menu("Welle %d geschafft" % game.wave, "%d Punkte verfügbar · %s" % [game.points, focus])
 	var grid = GridContainer.new()
@@ -506,11 +506,16 @@ func shop_screen() -> void:
 		var button = _button(grid, "%s · Lv. %s    /    %d Punkte\n%s" % [meta.name, str(game.stats[key]), price, meta.desc], func(): game.buy_upgrade(stat_key), "buy_" + key)
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		button.disabled = game.points < price or (key == "vitality" and game.mode == "hardcore")
+		button.disabled = (game.points < price and stat_key != purchased_upgrade) or (key == "vitality" and game.mode == "hardcore")
+		if stat_key == purchased_upgrade and game.points < price:
+			button.text += "\nNicht genug Punkte"
 		button.add_theme_font_size_override("font_size", 16)
 	_button(box, "NÄCHSTE WELLE   →", game.next_wave, "next_wave")
 	_button(box, "Run beenden", game.show_hub, "quit_run")
-	_focus_first()
+	if purchased_upgrade != "":
+		buttons["buy_" + purchased_upgrade].call_deferred("grab_focus")
+	else:
+		_focus_first()
 
 func gameover_screen(reason: String) -> void:
 	var box = _menu("Run beendet", reason)
