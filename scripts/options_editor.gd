@@ -6,6 +6,7 @@ var fields: Dictionary = {}
 var status: Label
 var apply_button: Button
 var discard_button: Button
+var binding_tab := 0
 
 func build() -> void:
 	fields.clear()
@@ -61,7 +62,7 @@ func build() -> void:
 		grid.add_theme_constant_override("v_separation", 12)
 		box.add_child(grid)
 		for row in Preferences.schema()[section]: build_field(grid, row)
-		if section == "controls": build_keys(box)
+		if section == "controls": build_binding_tabs(box)
 		if compact: ui._button(box, "Kategorie zurücksetzen", func(): reset_category(section), "reset_category")
 	build_footer()
 	ui._focus_first()
@@ -161,8 +162,33 @@ func reset_category(category: String) -> void:
 	if category == "controls": ui.options_draft["keys"] = Preferences.DEFAULT_KEYS.duplicate()
 	build()
 
-func build_keys(box: VBoxContainer) -> void:
+func build_binding_tabs(box: VBoxContainer) -> void:
 	ui._text(box, "TASTENBELEGUNG", 16, Color("a3b9e5"))
+	var tabs = TabContainer.new()
+	box.add_child(tabs)
+
+	var keyboard = VBoxContainer.new()
+	tabs.add_child(keyboard)
+	tabs.set_tab_title(0, "Maus & Tastatur")
+	build_keys(keyboard)
+
+	var controller = VBoxContainer.new()
+	tabs.add_child(controller)
+	tabs.set_tab_title(1, "Controller")
+	ui._text(controller, "Linker Stick oder Steuerkreuz: bewegen (Gamepad-Bewegung muss eingeschaltet sein).", 15)
+	ui._text(controller, "A: Menüpunkte bestätigen. Start: Pause oder Fortsetzen. X: Dash ab Tempo-Level 10.", 15)
+	ui._text(controller, "Schüsse feuern automatisch.", 15)
+
+	var touch = VBoxContainer.new()
+	tabs.add_child(touch)
+	tabs.set_tab_title(2, "Touch")
+	ui._text(touch, "Zum Bewegen auf der Spielfläche ziehen. Aktiviere dafür Maus-/Touch-Bewegung.", 15)
+	ui._text(touch, "Tippe auf eine Schaltfläche, um sie auszuwählen. Schüsse feuern automatisch.", 15)
+
+	tabs.current_tab = binding_tab
+	tabs.tab_changed.connect(func(index): binding_tab = index)
+
+func build_keys(box: VBoxContainer) -> void:
 	ui._text(box, "Taste auswählen und neue Taste drücken. Esc bricht ab. Pfeile, Esc und Gamepad bleiben als Alternativen verfügbar. Doppelte Belegungen werden abgelehnt.", 15)
 	var grid = GridContainer.new()
 	grid.columns = 3 if ui.root.size.x >= 1000 else 2
