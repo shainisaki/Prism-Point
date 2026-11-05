@@ -1,12 +1,12 @@
 extends RefCounted
 ## Native progress; browser localStorage is deliberately not overwritten.
+const Preferences = preload("res://scripts/preferences.gd")
 
 var path := "user://progress.json"
 var data: Dictionary = {
 	"version": 1, "gold": 0, "max_combo": 0, "best_waves": 0,
 	"characters": {"unknown": true}, "character": "unknown", "mode": "survival",
-	"settings": {"music": true, "sound": true, "volume": 0.7, "sfx_volume": 0.8,
-		"song": "sternenlauf", "enemy_bars": false, "passives": true},
+	"settings": Preferences.defaults(),
 }
 
 func load_progress() -> void:
@@ -26,6 +26,7 @@ func load_progress() -> void:
 	data.gold = maxi(0, int(data.gold))
 	data.max_combo = maxi(0, int(data.max_combo))
 	data.characters.unknown = true
+	data.settings = Preferences.normalize(data.settings)
 
 func save_progress() -> bool:
 	# Atomic replacement prevents an interrupted write from truncating progress.

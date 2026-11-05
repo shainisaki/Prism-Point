@@ -103,7 +103,7 @@ func run() -> void:
 	game.arena.spawn_boss("square")
 	var gold_before = game.store.data.gold
 	game.arena.damage_enemy(game.arena.enemies[0], 1000000)
-	expect(game.state == "shop" and game.store.data.gold > gold_before, "Boss death awards persistent gold and opens shop")
+	expect(game.state == "playing" and game.goal_unlocked and not game.boss_wave and game.store.data.gold > gold_before, "Boss death awards persistent gold and unlocks the shop for exploration")
 	game.show_hub()
 	game.store.data.gold = 50
 	expect(game.choose_character("runner") and game.store.data.gold == 35, "Gold unlocks Runner once")
@@ -124,13 +124,14 @@ func run() -> void:
 	expect(game.state == "hub", "Options return to lobby")
 	game.ui.compendium_screen()
 	expect(game.state == "compendium", "Compendium renders native entries")
-	game.ui.open_options("hub")
+	game.ui.open_options("hub", "controls")
 	game.ui.buttons.bind_move_up.pressed.emit()
 	var key_event = InputEventKey.new()
 	key_event.physical_keycode = KEY_I
 	key_event.keycode = KEY_I
 	key_event.pressed = true
 	game._unhandled_input(key_event)
+	game.ui.apply_options()
 	var new_key_bound = false
 	var old_key_bound = false
 	for event in InputMap.action_get_events("move_up"):

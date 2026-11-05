@@ -1,6 +1,7 @@
 shader_type canvas_item;
 render_mode unshaded;
 uniform vec2 world_size = vec2(6000.0, 4500.0);
+uniform float detail = 1.0;
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float line_distance(vec2 p, vec2 a, vec2 b) {
@@ -24,7 +25,7 @@ void fragment() {
 	float enabled = step(0.18, choice);
 	// All non-circuit pixels stay exactly #141414, without grain or stone tiles.
 	vec3 base = vec3(20.0 / 255.0);
-	vec3 color = mix(base, vec3(0.13, 0.17, 0.19), traces * enabled * 0.62);
-	color = mix(color, vec3(0.22, 0.30, 0.33), contacts * enabled * 0.72);
+	vec3 color = mix(base, vec3(0.13, 0.17, 0.19), traces * enabled * 0.62 * detail);
+	color = mix(color, vec3(0.22, 0.30, 0.33), contacts * enabled * 0.72 * detail);
 	COLOR = vec4(color, 1.0);
 }

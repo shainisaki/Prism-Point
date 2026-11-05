@@ -5,9 +5,10 @@ const SaveStore = preload("res://scripts/save_store.gd")
 const Arena = preload("res://scripts/arena.gd")
 const GameUI = preload("res://scripts/game_ui.gd")
 const GameAudio = preload("res://scripts/game_audio.gd")
+const Preferences = preload("res://scripts/preferences.gd")
 const BUILD_MAP = {"attack": "offense", "damage": "offense", "range": "offense", "speed": "mobility", "magnet": "mobility", "vitality": "defense", "armor": "defense", "resource": "economy"}
 const BUILD_NAMES = {"offense": "OFFENSIV", "mobility": "MOBIL", "defense": "TANK", "economy": "ECONOMY"}
-const DEFAULT_KEYS = {"move_up": KEY_W, "move_down": KEY_S, "move_left": KEY_A, "move_right": KEY_D, "pause_run": KEY_P, "dash": KEY_SHIFT}
+const DEFAULT_KEYS = Preferences.DEFAULT_KEYS
 
 var catalog: Dictionary
 var store = SaveStore.new()
@@ -39,6 +40,11 @@ var enemy_speed_mult := 1.0
 var enemy_hp_mult := 1.0
 var enemy_damage_mult := 1.0
 var test_mode := false
+var run_preferences: Dictionary = Preferences.defaults()
+var overtime_time := 0.0
+var overtime_level := 0
+var focused := true
+var preference_defaults: Dictionary = Preferences.defaults()
 
 func _ready() -> void:
 	catalog = JSON.parse_string(FileAccess.get_file_as_string("res://assets/game_data.json"))
@@ -49,7 +55,6 @@ func _ready() -> void:
 	mode = str(store.data.mode)
 	if not catalog.modes.has(mode):
 		mode = "survival"
-	_setup_input()
 	audio = GameAudio.new()
 	add_child(audio)
 	arena = Arena.new()
@@ -58,8 +63,7 @@ func _ready() -> void:
 	ui = GameUI.new()
 	ui.game = self
 	add_child(ui)
-	if not test_mode:
-		audio.apply_settings(store.data.settings)
+	apply_preferences()
 	ui.title_screen()
 
 func _setup_input() -> void:
@@ -88,6 +92,8 @@ func _setup_input() -> void:
 	for action in store.data.settings.get("keys", {}):
 		if DEFAULT_KEYS.has(action):
 			bind_key(action, int(store.data.settings["keys"][action]), false)
+	for action in ["move_up", "move_down", "move_left", "move_right"]:
+		InputMap.action_set_deadzone(action, float(pref("stick_deadzone")))
 
 func bind_key(action: String, key: int, persist: bool = true) -> void:
 	if not DEFAULT_KEYS.has(action):
@@ -106,10 +112,12 @@ func bind_key(action: String, key: int, persist: bool = true) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if ui != null and ui.rebind_action != "" and event is InputEventKey and event.pressed and not event.echo:
+		var message = ""
 		if event.keycode != KEY_ESCAPE:
-			bind_key(ui.rebind_action, event.physical_keycode)
+			message = ui.stage_key(ui.rebind_action, event.physical_keycode)
 		ui.rebind_action = ""
 		ui.open_options(ui.options_origin, ui.options_section)
+		if message != "": ui.toast(message, true)
 		get_viewport().set_input_as_handled()
 		return
 	if state == "title" and ((event is InputEventKey and event.pressed and event.keycode in [KEY_ENTER, KEY_SPACE]) or (event is InputEventJoypadButton and event.pressed)):
@@ -126,8 +134,47 @@ func _unhandled_input(event: InputEvent) -> void:
 			ui.return_from_compendium()
 		get_viewport().set_input_as_handled()
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_F11:
-		var full = DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if full else DisplayServer.WINDOW_MODE_FULLSCREEN)
+		if state == "options":
+			ui.options_draft.window_mode = "fullscreen" if ui.options_draft.window_mode == "windowed" else "windowed"
+			ui.open_options(ui.options_origin, ui.options_section)
+		else:
+			store.data.settings.window_mode = "fullscreen" if store.data.settings.window_mode == "windowed" else "windowed"
+			apply_preferences()
+			store.save_progress()
+
+func pref(key: String) -> Variant:
+	return store.data.settings.get(key, preference_defaults.get(key))
+
+func run_pref(key: String) -> Variant:
+	return run_preferences[key]
+
+func apply_preferences() -> void:
+	_setup_input()
+	Engine.max_fps = int(pref("fps_limit"))
+	if not test_mode:
+		audio.apply_settings(store.data.settings)
+	if DisplayServer.get_name() != "headless":
+		var window_mode = str(pref("window_mode"))
+		var mode_value = DisplayServer.WINDOW_MODE_WINDOWED
+		if window_mode == "borderless": mode_value = DisplayServer.WINDOW_MODE_FULLSCREEN
+		elif window_mode == "fullscreen": mode_value = DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN
+		DisplayServer.window_set_mode(mode_value)
+		if window_mode == "windowed":
+			var dimensions = str(pref("resolution")).split("x")
+			var target = Vector2i(int(dimensions[0]), int(dimensions[1]))
+			var available = DisplayServer.screen_get_usable_rect().size
+			DisplayServer.window_set_size(Vector2i(mini(target.x, available.x), mini(target.y, available.y)))
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if pref("vsync") else DisplayServer.VSYNC_DISABLED)
+	if is_instance_valid(arena):
+		arena.release_pointer()
+		arena.floor_surface.material.set_shader_parameter("detail", float(pref("floor_detail")))
+		if not pref("player_trail") or pref("reduce_motion"): arena.trail.clear()
+	if is_instance_valid(ui): ui.apply_preferences()
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_FOCUS_IN:
+		focused = what == NOTIFICATION_APPLICATION_FOCUS_IN
+		if is_instance_valid(audio): audio.set_focus(focused)
 
 func _physics_process(delta: float) -> void:
 	if state != "playing":
@@ -144,10 +191,12 @@ func _physics_process(delta: float) -> void:
 			finish_run("TIME ATTACK – %d Wellen geschafft!" % waves_cleared)
 			return
 	if not boss_wave:
+		var before = wave_time
 		wave_time = maxf(0.0, wave_time - delta)
 		if wave_time <= 0.0 and not goal_unlocked:
 			goal_unlocked = true
-			ui.toast("Welle überstanden · Folge dem Pfad zum Shop")
+			ui.toast("Shop aktiv · Finde ihn! Der Gegnerdruck steigt alle %.1f Sekunden." % run_pref("overtime_period"))
+		if goal_unlocked: advance_overtime(maxf(0, delta - before) if before > 0 else delta)
 	arena.simulate(delta)
 	ui.update_hud()
 
@@ -176,6 +225,7 @@ func show_hub() -> void:
 	ui.hub_screen()
 
 func start_run() -> void:
+	run_preferences = store.data.settings.duplicate(true)
 	stats = {"vitality": 0.0, "speed": 0.0, "magnet": 0.0, "armor": 0.0, "resource": 0.0, "damage": 0.0, "range": 0.0, "attack": 0.0}
 	var c = character()
 	for key in stats:
@@ -201,8 +251,10 @@ func start_run() -> void:
 
 func prepare_wave() -> void:
 	state = "playing"
-	wave_time = minf(90.0, 20.0 + (wave - 1) * 2.0)
+	wave_time = minf(90.0, 20.0 + (wave - 1) * 2.0) * float(run_pref("wave_duration"))
 	goal_unlocked = false
+	overtime_time = 0.0
+	overtime_level = 0
 	boss_wave = mode == "bossrush" or wave % 10 == 0
 	modifier = ""
 	resource_mult = 1
@@ -281,6 +333,34 @@ func recalculate_health() -> void:
 func player_speed() -> float:
 	return maxf(2.2, 4.8 + stats.speed * 0.45 + character().speed + (0.35 if focus == "mobility" else 0.0)) * 60.0
 
+func overtime_factor() -> float:
+	# Keep arithmetic finite even in artificially long, invincible simulations.
+	return exp(minf(log(float(run_pref("overtime_growth"))) * overtime_level, log(1.0e12)))
+
+func advance_overtime(delta: float) -> void:
+	if not goal_unlocked or boss_wave: return
+	overtime_time += delta
+	var level = 1 + int(floor((overtime_time + 0.00001) / float(run_pref("overtime_period"))))
+	if level == overtime_level: return
+	var previous = overtime_factor()
+	overtime_level = level
+	var growth = overtime_factor() / previous
+	# Preserve damage taken: current and maximum HP grow by the same factor.
+	var shared_pools: Array[Dictionary] = []
+	for enemy in arena.enemies:
+		if enemy.hp > 0:
+			enemy.hp *= growth
+			enemy.max_hp *= growth
+			if enemy.has("shared"):
+				var already_scaled = false
+				for pool in shared_pools:
+					if is_same(pool, enemy.shared): already_scaled = true
+				if not already_scaled:
+					enemy.shared.hp *= growth
+					enemy.shared.max_hp *= growth
+					shared_pools.append(enemy.shared)
+	arena.spawn_cd = minf(arena.spawn_cd / growth, arena.spawn_interval())
+
 func player_damage() -> float:
 	var level = float(stats.damage)
 	var bonus = floor(1.0 + (level - 1) * 0.75 + log(1.0 + level) / log(2.0) * 0.5) if level > 0 else 0.0
@@ -317,7 +397,7 @@ func hurt(amount: int, source: Dictionary = {}) -> void:
 	invincible = 0.35 if blocked else 0.7
 	if blocked:
 		return
-	hp -= maxi(1, int(round(amount * (1.0 + difficulty() * 0.1 / 150.0))))
+	hp -= maxi(1, int(round(amount * (1.0 + difficulty() * 0.1 / 150.0) * float(run_pref("enemy_damage")))))
 	combo = 0
 	arena.burst(arena.player, Color("ff6b6b"), 12)
 	arena.shake = 7.0
@@ -328,7 +408,8 @@ func hurt(amount: int, source: Dictionary = {}) -> void:
 
 func register_kill(position: Vector2) -> void:
 	combo += 1
-	arena.floating_texts.append({"p": position + Vector2(0, -25), "text": str(combo), "life": 1.15})
+	if pref("combo_popups"):
+		arena.floating_texts.append({"p": position + Vector2(0, -25), "text": str(combo), "life": 1.15})
 	combo_time = 2.2
 	points += maxi(0, mini(3, 1 + int(combo / 5.0)) - 1) + (1 if modifier == "rich" else 0)
 	if combo > int(store.data.max_combo):

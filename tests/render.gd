@@ -136,6 +136,37 @@ func run() -> void:
 	game.ui.return_from_options()
 	game.ui.buttons.pause_controls.pressed.emit()
 	await capture("pause-controls")
+	for section in ["all", "audio", "display", "difficulty", "controls", "hud", "accessibility", "gameplay"]:
+		game.ui.open_options("paused", section)
+		await capture("settings-" + section)
+	game.ui.open_options("paused", "difficulty")
+	game.ui.options_editor.fields.enemy_health.value = 1.7
+	await capture("settings-draft")
+	game.ui.return_from_options()
+	await capture("settings-unsaved")
+	game.ui.buttons.discard_and_back.pressed.emit()
+	game.resume_run()
+	game.wave_time = 0
+	game.goal_unlocked = true
+	game.advance_overtime(15)
+	for i in 12:
+		game.arena.spawn_enemy(["runner", "tank", "shooter"][i % 3], game.arena.player + Vector2.from_angle(TAU * i / 12.0) * (170 + i * 8))
+	game.ui.update_hud()
+	game.ui.toast_label.hide()
+	await capture("overtime")
+	game.pause_run()
+	game.ui.open_options("paused", "accessibility")
+	game.ui.options_editor.fields.text_scale.value = 1.4
+	game.ui.options_editor.fields.high_contrast.button_pressed = true
+	game.ui.apply_options()
+	root.content_scale_size = Vector2i.ZERO
+	root.size = Vector2i(800, 600)
+	game.ui.open_options("paused", "accessibility")
+	await capture("settings-accessible-compact")
+	# Scroll to check the last settings and the persistent action bar too.
+	for scroll in game.ui.overlay.find_children("*", "ScrollContainer", true, false):
+		scroll.scroll_vertical = 10000
+	await capture("settings-accessible-bottom")
 	game.queue_free()
 	await process_frame
 	DirAccess.remove_absolute("user://render_test.json")

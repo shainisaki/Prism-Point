@@ -91,7 +91,7 @@ func _process(_delta: float) -> void:
 	queue_redraw()
 
 func _unhandled_input(event: InputEvent) -> void:
-	if game.state != "playing":
+	if game.state != "playing" or not game.pref("pointer_move"):
 		return
 	if event is InputEventScreenTouch:
 		if event.pressed and pointer_id == -1:
@@ -100,7 +100,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif not event.pressed and event.index == pointer_id:
 			release_pointer()
 	elif event is InputEventScreenDrag and event.index == pointer_id:
-		pointer_vector = ((event.position - pointer_start) / 65.0).limit_length()
+		pointer_vector = ((event.position - pointer_start) / (65.0 / float(game.pref("pointer_sensitivity")))).limit_length()
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
 			pointer_id = 99
@@ -108,7 +108,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			release_pointer()
 	elif event is InputEventMouseMotion and pointer_id == 99:
-		pointer_vector = ((event.position - pointer_start) / 65.0).limit_length()
+		pointer_vector = ((event.position - pointer_start) / (65.0 / float(game.pref("pointer_sensitivity")))).limit_length()
 
 func release_pointer() -> void:
 	pointer_id = -1
@@ -117,7 +117,7 @@ func release_pointer() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
 		release_pointer()
-		if game != null and game.state == "playing":
+		if game != null and game.state == "playing" and game.pref("pause_unfocused"):
 			game.pause_run()
 
 func generate_wave() -> void:
@@ -390,13 +390,20 @@ func line_clear(a: Vector2, b: Vector2) -> bool:
 
 func simulate(delta: float) -> void:
 	var direction = Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	if not game.pref("gamepad"):
+		direction = Vector2.ZERO
+		for entry in [["move_up", Vector2.UP], ["move_down", Vector2.DOWN], ["move_left", Vector2.LEFT], ["move_right", Vector2.RIGHT]]:
+			for event in InputMap.action_get_events(entry[0]):
+				if event is InputEventKey and Input.is_physical_key_pressed(event.physical_keycode): direction += entry[1]
+		direction = direction.limit_length()
 	if pointer_vector.length() > 0.1:
 		direction = pointer_vector
 	step_player(direction, delta)
 	var camera_target = player + player_velocity.limit_length(game.player_speed()) * 0.045
-	camera.position = camera.position.lerp(camera_target, 1.0 - exp(-14.0 * delta))
+	camera.position = camera.position.lerp(camera_target, 1.0 - exp(-14.0 * delta)) if game.pref("camera_follow") and not game.pref("reduce_motion") else player
 	shake = move_toward(shake, 0.0, delta * 25)
-	camera.offset = Vector2(randf_range(-shake, shake), randf_range(-shake, shake))
+	var shake_scale = 0.0 if game.pref("reduce_motion") else float(game.pref("screen_shake"))
+	camera.offset = Vector2(randf_range(-shake, shake), randf_range(-shake, shake)) * shake_scale
 	camera.force_update_scroll()
 	reveal_view()
 	shot_cd -= delta
@@ -410,10 +417,12 @@ func simulate(delta: float) -> void:
 			laser_event_cd = 3.0
 			var origin = random_spawn()
 			lasers.append({"a": origin, "b": origin + (player - origin).normalized() * 900, "time": 0.0})
-	if spawn_cd <= 0 and not game.boss_wave and not game.goal_unlocked:
-		spawn_cd = maxf(0.65, 2.2 - (game.wave - 1) * 0.048 - game.difficulty() * 0.00018)
-		var count = randi_range(1, mini(8, 2 + int((game.wave - 1) * 0.4))) + (2 if game.modifier == "swarm" else 0)
-		for i in mini(count, 55 - enemies.size() - warnings.size()):
+	if spawn_cd <= 0 and not game.boss_wave:
+		spawn_cd = spawn_interval()
+		var count = spawn_count()
+		# Bound active actors while escalating HP continues to punish waiting.
+		var capacity = 160 if game.goal_unlocked else 55
+		for i in maxi(0, mini(count, capacity - enemies.size() - warnings.size())):
 			warnings.append({"p": random_spawn(), "time": 0.55, "kind": pick_enemy_type()})
 	for i in range(warnings.size() - 1, -1, -1):
 		warnings[i].time -= delta
@@ -464,6 +473,9 @@ func step_player(direction: Vector2, delta: float) -> void:
 	# Integrating the exponential analytically keeps travel identical at 30/60/120 Hz.
 	var movement = desired * delta + (player_velocity - desired) * (1.0 - decay) / response
 	player_velocity = desired + (player_velocity - desired) * decay
+	if not game.pref("smooth_movement"):
+		player_velocity = desired
+		movement = desired * delta
 	dash_cd = maxf(0, dash_cd - delta)
 	if Input.is_action_just_pressed("dash") and game.stats.speed >= 10 and dash_cd <= 0:
 		dash_left = 0.2
@@ -480,17 +492,26 @@ func step_player(direction: Vector2, delta: float) -> void:
 	if absf(travelled.y - movement.y) > 0.5: player_velocity.y = 0
 	var moving = clampf(travelled.length() / maxf(1, game.player_speed() * delta), 0, 1)
 	visual_stretch = lerpf(visual_stretch, 1.0 + moving * (0.22 if dash_left > 0 else 0.10), 1.0 - exp(-18.0 * delta))
+	if game.pref("reduce_motion"): visual_stretch = 1.0
 	for i in range(trail.size() - 1, -1, -1):
 		trail[i].life -= delta
 		if trail[i].life <= 0: trail.remove_at(i)
 	trail_clock += delta
-	if travelled.length() > 0.5 and trail_clock >= 0.025:
+	if travelled.length() > 0.5 and trail_clock >= 0.025 and game.pref("player_trail") and not game.pref("reduce_motion"):
 		trail_clock = 0.0
 		trail.append({"p": before, "life": 0.24})
 		if trail.size() > 16: trail.pop_front()
 
 func player_color() -> Color:
 	return Color("b0b8cc") if game.selected_character == "sniper" else Color(game.character().color)
+
+func spawn_interval() -> float:
+	var base = maxf(0.65, 2.2 - (game.wave - 1) * 0.048 - game.difficulty() * 0.00018)
+	return maxf(0.04, base / (float(game.run_pref("spawn_frequency")) * game.overtime_factor()))
+
+func spawn_count(base: int = -1) -> int:
+	if base < 0: base = randi_range(1, mini(8, 2 + int((game.wave - 1) * 0.4))) + (2 if game.modifier == "swarm" else 0)
+	return int(clampf(ceil(base * float(game.run_pref("spawn_amount")) * game.overtime_factor()), 1, 160))
 
 func pick_enemy_type() -> String:
 	if game.modifier == "swarm":
@@ -511,14 +532,15 @@ func spawn_enemy(kind: String, p: Vector2) -> Dictionary:
 	var w = game.wave
 	var speed_mul = 1 + minf(0.45, (w - 1) * 0.025 + game.difficulty() * 0.1 / 280)
 	var health = 1.0 if w == 1 else round(1 + maxf(1, data[2] / 4.0) * (w - 1) * 0.85 + (w - 1) * 0.55 + game.difficulty() * 0.25 / 60 + pow(maxi(0, w - 5), 1.1) * 0.12)
-	var enemy = {"id": next_id, "kind": kind, "p": p, "r": data[0], "speed": (data[1] + (w * 0.04 if kind == "runner" else 0.0)) * 60.0 * speed_mul * game.enemy_speed_mult,
-		"hp": maxf(1, health * game.enemy_hp_mult), "max_hp": maxf(1, health * game.enemy_hp_mult), "color": Color(data[3]), "flash": 0.0,
+	var scaled_health = maxf(0.25, health * game.enemy_hp_mult * float(game.run_pref("enemy_health")) * game.overtime_factor())
+	var enemy = {"id": next_id, "kind": kind, "p": p, "r": data[0], "speed": (data[1] + (w * 0.04 if kind == "runner" else 0.0)) * 60.0 * speed_mul * game.enemy_speed_mult * float(game.run_pref("enemy_speed")),
+		"hp": scaled_health, "max_hp": scaled_health, "color": Color(data[3]), "flash": 0.0,
 		"cd": randf_range(0.6, 1.8), "nav_cd": 0.0, "path": PackedVector2Array(), "boss": false, "dash": 0.0, "velocity": Vector2.ZERO, "age": 0.0}
 	if game.modifier == "haste":
 		enemy.speed *= 1.22
 	if kind == "lootling":
-		enemy.hp = 12.0
-		enemy.max_hp = 12.0
+		enemy.hp = 12.0 * float(game.run_pref("enemy_health")) * game.overtime_factor()
+		enemy.max_hp = enemy.hp
 	next_id += 1
 	enemies.append(enemy)
 	return enemy
@@ -526,7 +548,7 @@ func spawn_enemy(kind: String, p: Vector2) -> Dictionary:
 func spawn_boss(kind: String = "", elite: bool = false) -> void:
 	if kind == "":
 		kind = BOSS_KINDS.pick_random() if game.mode == "bossrush" else BOSS_KINDS[posmod(int(game.wave / 10.0) - 1, 4)]
-	var health = round(140 * (1.2 + (game.wave - 1) * 0.22 + game.difficulty() * 0.25 / 50.0)) * game.enemy_hp_mult
+	var health = round(140 * (1.2 + (game.wave - 1) * 0.22 + game.difficulty() * 0.25 / 50.0)) * game.enemy_hp_mult * float(game.run_pref("enemy_health"))
 	if game.mode == "bossrush":
 		health *= 0.9
 	if elite:
@@ -557,6 +579,7 @@ func spawn_boss(kind: String = "", elite: bool = false) -> void:
 		boss.velocity = Vector2(300, 0)
 
 func boss_dictionary(kind: String, p: Vector2, radius: float, health: float, color: Color, elite: bool) -> Dictionary:
+	if kind in ["endboss", "endboss_node"]: health *= float(game.run_pref("enemy_health"))
 	var result = {"id": next_id, "kind": kind, "p": p, "r": radius, "hp": health, "max_hp": health, "color": color, "flash": 0.0,
 		"speed": 90.0, "boss": true, "elite": elite, "cd": 1.5, "age": 0.0, "roll": 0.0, "nav_cd": 0.0, "path": PackedVector2Array(), "dash": 0.0, "velocity": Vector2.ZERO, "invisible": false}
 	next_id += 1
@@ -779,12 +802,13 @@ func damage_enemy(enemy: Dictionary, amount: float) -> void:
 	burst(enemy.p, enemy.color, 16)
 	game.register_kill(enemy.p)
 	pickups.append({"p": enemy.p, "value": 1, "kind": "point"})
-	if randf() < HEART_DROP_CHANCE:
+	if randf() < float(game.run_pref("heart_chance")):
 		pickups.append({"p": enemy.p + Vector2(12, 0), "value": 1, "kind": "heart"})
 	if enemy.kind == "splitter":
 		for i in 2:
 			var child = spawn_enemy("runner", enemy.p + Vector2(i * 22 - 11, 0))
-			child.hp = 1.0
+			child.hp = float(game.run_pref("enemy_health")) * game.overtime_factor()
+			child.max_hp = child.hp
 			child.r = 8.0
 			child.color = Color("dd88ff")
 	if enemy.kind == "lootling":
@@ -810,7 +834,10 @@ func damage_enemy(enemy: Dictionary, amount: float) -> void:
 					remaining = true
 			if not remaining:
 				lasers.clear()
-				game.open_shop()
+				game.boss_wave = false
+				game.wave_time = 0
+				game.goal_unlocked = true
+				game.ui.toast("Boss besiegt · Shop aktiv! Finde ihn, bevor der Druck steigt.")
 
 func damage_object(object: Dictionary, damage: float) -> void:
 	object.hp -= damage
@@ -940,7 +967,7 @@ func apply_stat(key: String, amount: float) -> void:
 	game.ui.toast("Systembonus: %+.2f %s" % [amount, game.catalog.passive_meta[key].name])
 
 func burst(p: Vector2, color: Color, count: int) -> void:
-	for i in mini(count, 200 - particles.size()):
+	for i in mini(int(count * float(game.pref("particle_amount"))), 200 - particles.size()):
 		particles.append({"p": p, "v": Vector2.from_angle(randf() * TAU) * randf_range(30, 180), "life": randf_range(0.15, 0.5), "color": color})
 
 func polygon(center: Vector2, radius: float, sides: int, angle: float = 0.0) -> PackedVector2Array:
@@ -950,22 +977,20 @@ func polygon(center: Vector2, radius: float, sides: int, angle: float = 0.0) -> 
 	return points
 
 func glow(p: Vector2, radius: float, color: Color) -> void:
-	draw_circle(p, radius * 2.2, Color(color, 0.05))
-	draw_circle(p, radius * 1.5, Color(color, 0.10))
+	if game.pref("glow"):
+		draw_circle(p, radius * 2.2, Color(color, 0.05))
+		draw_circle(p, radius * 1.5, Color(color, 0.10))
 	draw_circle(p, radius, color)
 
 func _draw() -> void:
 	if walls.is_empty():
 		return
 	var visible = Rect2(camera.get_screen_center_position() - get_viewport_rect().size / 2 - Vector2(150, 150), get_viewport_rect().size + Vector2(300, 300))
-	if route.size() > 1:
-		var color = Color("51c9d7") if game.goal_unlocked else Color("415864")
-		draw_polyline(route, Color(color, 0.12), 16, true)
-		for i in range(1, route.size()):
-			draw_dashed_line(route[i - 1], route[i], Color(color, 0.65), 2, 7, true)
 	for hazard in hazards:
-		draw_rect(hazard, Color(0.8, 0.2, 0.25, 0.16 if sin(game.elapsed * 2) > 0.25 else 0.04))
+		draw_rect(hazard, Color(0.8, 0.2, 0.25, 0.16 if not game.pref("flashes") or sin(game.elapsed * 2) > 0.25 else 0.04))
 		draw_rect(hazard, Color("813b47"), false, 1)
+		if game.pref("hazard_labels"):
+			draw_string(ThemeDB.fallback_font, hazard.position + Vector2(8, 22), "GEFAHR", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color("ffdcaa"))
 	for wall in walls:
 		if not visible.intersects(wall):
 			continue
@@ -982,6 +1007,7 @@ func _draw() -> void:
 			continue
 		draw_object(object)
 	for warning in warnings:
+		if not game.pref("spawn_markers"): continue
 		draw_arc(warning.p, 12 + warning.time * 25, 0, TAU, 24, Color("ff6b6b"), 1.5, true)
 		draw_line(warning.p - Vector2(6, 6), warning.p + Vector2(6, 6), Color("ff6b6b"), 2)
 		draw_line(warning.p - Vector2(-6, 6), warning.p + Vector2(-6, 6), Color("ff6b6b"), 2)
@@ -992,7 +1018,7 @@ func _draw() -> void:
 			elif pickup.kind == "point":
 				var radius = PointSymbol.radius(int(pickup.value))
 				PointSymbol.draw_symbol(self, pickup.p, radius)
-				if pickup.value > 1:
+				if pickup.value > 1 and game.pref("point_values"):
 					var text = str(int(pickup.value))
 					var at = pickup.p - Vector2(ThemeDB.fallback_font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x / 2, radius + 6)
 					draw_string_outline(ThemeDB.fallback_font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, 3, Color("102128"))
@@ -1020,12 +1046,13 @@ func _draw() -> void:
 	for echo in trail:
 		var fraction = clampf(echo.life / 0.24, 0, 1)
 		draw_circle(echo.p, player_radius * (0.55 + fraction * 0.4), Color(tint, fraction * fraction * 0.24))
-	if game.invincible <= 0 or fmod(game.invincible, 0.14) < 0.07:
+	if not game.pref("flashes") or game.invincible <= 0 or fmod(game.invincible, 0.14) < 0.07:
 		draw_circle(player + Vector2(3, 6), player_radius + 2, Color(0, 0, 0, 0.4))
 		draw_set_transform(player, facing.angle(), Vector2(visual_stretch, 1.0 / visual_stretch))
-		draw_arc(Vector2.ZERO, player_radius + 5, 0, TAU, 40, Color(tint, 0.15), 5, true)
+		if game.pref("glow"): draw_arc(Vector2.ZERO, player_radius + 5, 0, TAU, 40, Color(tint, 0.15), 5, true)
 		draw_circle(Vector2.ZERO, player_radius, tint)
 		draw_set_transform(Vector2.ZERO)
+	if game.pref("player_marker"): draw_arc(player, player_radius + 9, 0, TAU, 40, Color.WHITE, 2, true)
 	for popup in floating_texts:
 		var alpha = clampf(popup.life / 0.4, 0, 1)
 		var font = ThemeDB.fallback_font
@@ -1064,7 +1091,7 @@ func draw_metal_wall(wall: Rect2) -> void:
 			draw_circle(Vector2(wall.position.x + 7, y - 5), 1.5, Color("81939a"))
 
 func draw_enemy(enemy: Dictionary) -> void:
-	var color = Color.WHITE if enemy.flash > 0 else enemy.color
+	var color = Color.WHITE if enemy.flash > 0 and game.pref("flashes") else enemy.color
 	if enemy.get("invisible", false):
 		color = Color(color, 0.12)
 	draw_circle(enemy.p + Vector2(3, 5), enemy.r, Color(0, 0, 0, 0.35))
@@ -1084,7 +1111,8 @@ func draw_enemy(enemy: Dictionary) -> void:
 		draw_circle(enemy.p, enemy.r * 0.5, color)
 	if enemy.kind == "dasher" and enemy.cd < 0.5:
 		draw_line(enemy.p, enemy.p + (player - enemy.p).normalized() * 180, Color("f8adad"), 1.5)
-	if game.store.data.settings.get("enemy_bars", false) or enemy.boss:
+	if game.pref("enemy_outlines") and not enemy.get("invisible", false): draw_arc(enemy.p, enemy.r + 3, 0, TAU, 32, Color("f6eee0"), 1.5, true)
+	if (game.pref("enemy_bars") and not enemy.boss) or (enemy.boss and game.pref("boss_bars")):
 		var width = maxf(28, enemy.r * 2)
 		draw_rect(Rect2(enemy.p - Vector2(width / 2, enemy.r + 13), Vector2(width, 4)), Color("292c35"))
 		draw_rect(Rect2(enemy.p - Vector2(width / 2, enemy.r + 13), Vector2(width * maxf(0, enemy.hp / enemy.max_hp), 4)), enemy.color)

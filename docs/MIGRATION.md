@@ -59,7 +59,11 @@ nummerierte Combo-Popups, Herzen und HP-Übernahme, Rollanimation,
 Weitere 31 Checks in `tests/feel.gd` prüfen additive Punkteverschmelzung samt
 Sammelboni, 5.000 dichte Drops, Hindernisse, Bewegungsverhalten bei 30/60/120 Hz,
 Bewegungsspuren, bündige Modulecken und die Funktionen des neuen Pausenmenüs.
-Aktuelles Gesamtergebnis mit Godot 4.6.3: 152 Checks bestanden, keine
+Weitere 62 Checks in `tests/options.gd` prüfen die Eskalation nach Shop-Aktivierung,
+vorhandene und neue Gegner-HP, Pausieren/Zurücksetzen, transaktionale Optionen,
+Speichern und Speicherfehler, sieben Kategorien, Tasten-Konflikte, Run-Balance,
+Audio-/Grafik-/HUD-Wirkungen und kleine Fenster mit großer Schrift.
+Aktuelles Gesamtergebnis mit Godot 4.6.3: 214 Checks bestanden, keine
 Engine-/Scriptfehler. Bilder und Änderungen: [Gameplay-Update](GAMEPLAY_UPDATE.md).
 Die neue UI-Kombination und kleine Fenstergrößen: [UI-Update](UI_UPDATE.md).
 
@@ -76,3 +80,5 @@ Die aktuelle technische Ausführung mit Druckplatte, Datenchip und Schaltkreis-B
 ist im [Elektronik-Update](TECH_UPDATE.md) beschrieben.
 Punkte, Bewegungsgefühl und das neue Pausenmenü zeigt das
 [Bewegungs- und UI-Update](FEEL_UPDATE.md).
+Shopsuche ohne Weglinie und die neue Einstellungszentrale stehen im
+[Options-Update](OPTIONS_UPDATE.md).

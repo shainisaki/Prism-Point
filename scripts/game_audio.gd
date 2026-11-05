@@ -6,6 +6,7 @@ var sounds: Array[AudioStreamPlayer] = []
 var settings: Dictionary
 var current_song := ""
 var sound_index := 0
+var focused := true
 
 func _exit_tree() -> void:
 	# Explicitly release looping decoders, including with the headless audio driver.
@@ -26,7 +27,7 @@ func _ready() -> void:
 		sounds.append(voice)
 
 func apply_settings(value: Dictionary) -> void:
-	settings = value
+	settings = value.duplicate(true)
 	var song := str(settings.get("song", "sternenlauf"))
 	if not TRACKS.has(song):
 		song = "sternenlauf"
@@ -36,11 +37,25 @@ func apply_settings(value: Dictionary) -> void:
 		stream.loop = true
 		music.stream = stream
 		music.play()
-	music.volume_db = linear_to_db(clampf(float(settings.get("volume", 0.7)), 0.001, 1.0)) - 10.0
-	music.stream_paused = not bool(settings.get("music", true))
+	update_music_gain()
+
+func set_focus(value: bool) -> void:
+	focused = value
+	if is_instance_valid(music): update_music_gain()
+	if not focused and settings.get("mute_unfocused", true):
+		for voice in sounds: voice.stop()
+
+func update_music_gain() -> void:
+	var gain = float(settings.get("master_volume", 1.0)) * float(settings.get("volume", 0.7))
+	music.volume_db = linear_to_db(maxf(gain, 0.00001)) - 10.0
+	music.stream_paused = not settings.get("music", true) or gain <= 0 or (not focused and settings.get("mute_unfocused", true))
+
+func effect_gain(kind: String) -> float:
+	var group = {"shot": "shot_volume", "hit": "hit_volume", "kill": "hit_volume", "hurt": "warning_volume", "boss": "warning_volume", "collect": "collect_volume", "ui": "ui_volume"}.get(kind, "sfx_volume")
+	return float(settings.get("master_volume", 1.0)) * float(settings.get("sfx_volume", 0.8)) * float(settings.get(group, 1.0))
 
 func effect(kind: String) -> void:
-	if not settings.get("sound", true) or sounds.is_empty():
+	if not settings.get("sound", true) or sounds.is_empty() or effect_gain(kind) <= 0 or (not focused and settings.get("mute_unfocused", true)):
 		return
 	var frequency := {"shot": 640.0, "hit": 320.0, "kill": 880.0, "hurt": 110.0, "collect": 1100.0, "boss": 75.0}.get(kind, 440.0) as float
 	var duration := 0.07 if kind != "boss" else 0.4
@@ -59,5 +74,5 @@ func effect(kind: String) -> void:
 	var voice := sounds[sound_index % sounds.size()]
 	sound_index += 1
 	voice.stream = stream
-	voice.volume_db = linear_to_db(clampf(float(settings.get("sfx_volume", 0.8)), 0.001, 1.0)) - 8.0
+	voice.volume_db = linear_to_db(maxf(effect_gain(kind), 0.00001)) - 8.0
 	voice.play()

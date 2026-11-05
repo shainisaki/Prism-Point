@@ -17,7 +17,7 @@ with tempfile.TemporaryDirectory(prefix="prism-tests-") as temporary:
     environment = os.environ.copy()
     for suffix in ("DATA", "CONFIG", "CACHE"):
         environment[f"XDG_{suffix}_HOME"] = str(Path(temporary) / suffix.lower())
-    for arguments in (["--editor", "--import", "--quit"], ["--script", "tests/smoke.gd"], ["--script", "tests/feedback.gd"], ["--script", "tests/feel.gd"]):
+    for arguments in (["--editor", "--import", "--quit"], ["--script", "tests/smoke.gd"], ["--script", "tests/feedback.gd"], ["--script", "tests/feel.gd"], ["--script", "tests/options.gd"]):
         try:
             result = subprocess.run(
                 [godot, "--headless", "--path", str(project), *arguments],

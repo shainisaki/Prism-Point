@@ -1,7 +1,8 @@
 # PRISM POINT — Godot
 
 Native 2D-Version für **Godot 4.6+**, entwickelt und geprüft mit Godot 4.6.3.
-Aktueller Stand: [Punkte, dynamische Bewegung und neues Pausenmenü mit Bildern](docs/FEEL_UPDATE.md).
+Aktueller Stand: [Shopsuche, Eskalation und 60 Einstellungen mit Bildern](docs/OPTIONS_UPDATE.md).
+Punkte, dynamische Bewegung und das Pausenmenü stehen im [Bewegungs-Update](docs/FEEL_UPDATE.md).
 Das [Elektronik-Update](docs/TECH_UPDATE.md) beschreibt Druckplatte, Datenchip und Schaltkreis-Boden.
 Das Spiel verwendet GDScript, Godot-Controls, Camera2D, AudioStreamPlayer und
 AStarGrid2D. Es benötigt **keinen Browser, kein HTML und keinen Webserver**.
@@ -33,8 +34,12 @@ Alternativ im Projektverzeichnis: `godot --path .`
 
 Die Haupttasten lassen sich in **Optionen** neu belegen; Pfeiltasten und
 Gamepad bleiben als Alternativen verfügbar. Der erste Kauf legt den Build fest.
-Nach dem Wellen-Timer dem markierten Pfad zum Shop folgen. Boss-Wellen enden
-erst nach dem Sieg über den Boss. Gold schaltet dauerhaft Charaktere frei.
+Nach dem Wellen-Timer den Shop selbst suchen: Es gibt keine Weglinie, auch
+nicht auf der Minikarte. Nach einem Boss-Sieg wird der Shop ebenfalls aktiviert.
+Während der Suche spawnen weiter Gegner, sofort häufiger und in größerer Zahl.
+Alle **7,5 Sekunden** steigen Gegnerzahl und HP um **×1,5**; das Spawnintervall
+wird durch **1,5** geteilt. Erst im Shop-Menü pausiert der Kampf.
+Gold schaltet dauerhaft Charaktere frei.
 
 HP bleiben beim Shopbesuch und Wellenwechsel erhalten. Besiegte Gegner haben
 eine **8%-Chance**, ein rotes Herz fallenzulassen: Aufsammeln heilt **1 HP**,
@@ -56,6 +61,14 @@ schnelles Abbremsen, eine kurze Spur in der Charakterfarbe und eine dezent
 nachführende Kamera machen die Bewegung dynamischer. Im Pausenmenü öffnen
 eigene Schaltflächen Audio, Anzeige, Steuerung und Kompendium.
 
+Die Einstellungszentrale bietet **60 Einstellungen plus sechs Tastenbelegungen**
+in den Kategorien Audio, Grafik, Schwierigkeit, Steuerung, HUD, Barrierefreiheit
+und Spiel. Änderungen bleiben beim Kategorienwechsel erhalten und werden mit
+**Anwenden** gespeichert. **Verwerfen**, Kategorie-/Gesamtstandard und eine
+Abfrage beim Verlassen schützen vor versehentlichen Änderungen.
+Audio, Grafik, Steuerung und Anzeigen wirken nach dem Anwenden; Balancewerte
+werden beim nächsten neuen Run übernommen. Der Nebel verdeckt das HUD weiterhin.
+
 ## Übertragene Inhalte
 
 - Titelgrafiken und alle drei Musikstücke aus dem Original, überarbeiteter Kristallsprite;
@@ -63,7 +76,7 @@ eigene Schaltflächen Audio, Anzeige, Steuerung und Kompendium.
 - Standard, Runner, Bomber, Tank und Sniper mit Kosten, Startwerten,
   Granaten, Tempo-Schaden, Durchdringen/Abprallen und Combo-Freischaltung.
 - Survival, Endless, Boss Rush, Hardcore und zehnminütiger Time Attack.
-- Prozedurale 6000×4500-Arena, Kollisionen, A*-Navigation, Shop-Pfad, Minikarte,
+- Prozedurale 6000×4500-Arena, Kollisionen, A*-Navigation, erreichbarer Shop, Minikarte,
   Spawn-Warnungen, sechs reguläre Gegnerarten, Splitter und Beute-Gegner.
 - Wellen-Skalierung, acht Upgrades, Build-Rabatte, Punkte, Gold, Combos,
   Magnetismus, Rüstung/Dornen, Mehrfachschuss und Dash.
@@ -109,7 +122,9 @@ Die Tests umfassen 52 Basis-Checks sowie 69 Regressionen für Druckplatte, Daten
 Kartenaufdeckung, Nebel, HP-Verlauf, Herzen, Combo-Anzeigen und neue Layouts.
 Weitere 31 Checks prüfen Punkteverschmelzung, Werterhalt, 5.000 dichte Drops,
 Bewegung bei mehreren Bildraten, bündige Wandecken und die Pausen-Schaltflächen:
-insgesamt **152 bestandene Checks**.
+Weitere 62 Checks prüfen Eskalation, Optionen-Entwürfe, Anwenden/Verwerfen,
+Speicherfehler, Tastenbelegung, tatsächliche Laufzeitwirkungen und kleine Fenster:
+insgesamt **214 bestandene Checks**.
 Er prüft zusätzlich Engine-/Scriptfehler, weil Godot bei manchen Laufzeitfehlern
 trotzdem Exitcode 0 liefert. Es gibt keine npm-/Python-Paketabhängigkeiten.
 Für den optionalen visuellen Test mit verfügbarem Bildschirm:

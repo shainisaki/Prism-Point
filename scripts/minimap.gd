@@ -16,11 +16,6 @@ func _draw() -> void:
 		var points = PackedVector2Array()
 		for point in segment.polygon: points.append(point * scale_xy)
 		draw_colored_polygon(points, Color("91a99b"))
-	if arena.route.size() > 1:
-		var points = PackedVector2Array()
-		for point in arena.route:
-			points.append(point * scale_xy)
-		draw_polyline(points, Color("395d68"), 1, true)
 	draw_circle(arena.goal * scale_xy, 3, Color("5dffc0") if arena.game.goal_unlocked else Color("6b829a"))
 	# The same world-to-map transform and visibility mask apply to every feature.
 	draw_texture_rect(arena.discovery_texture, Rect2(Vector2.ZERO, size), false)

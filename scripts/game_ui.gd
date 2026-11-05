@@ -3,6 +3,8 @@ extends CanvasLayer
 const MiniMap = preload("res://scripts/minimap.gd")
 const HudClock = preload("res://scripts/hud_clock.gd")
 const PointSymbol = preload("res://scripts/point_symbol.gd")
+const Preferences = preload("res://scripts/preferences.gd")
+const OptionsEditor = preload("res://scripts/options_editor.gd")
 const ACCENT = Color("60dce4")
 const AMBER = Color("edb854")
 const MUTED = Color("8ea5b2")
@@ -34,12 +36,16 @@ var options_origin := "hub"
 var options_section := "all"
 var compendium_origin := "hub"
 var rebind_action := ""
+var options_active := false
+var options_draft: Dictionary = {}
+var options_editor = OptionsEditor.new()
 var buttons: Dictionary = {}
 var title_background: TextureRect
 var landscape = preload("res://assets/images/title_landscape.jpg")
 var portrait = preload("res://assets/images/title_portrait.jpg")
 
 func _ready() -> void:
+	options_editor.ui = self
 	root = Control.new()
 	root.name = "Interface"
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -197,11 +203,13 @@ func _layout_hud() -> void:
 	var margin = 24.0 if not stacked else 16.0
 	var health_width = 300.0 if not compact else 226.0
 	var wave_width = 314.0 if not compact else 260.0
-	var currencies_width = 280.0 if not compact else 260.0
+	var scale_factor = minf(float(game.pref("hud_scale")), 1.0 if width < 1200 else 1.25)
+	var currencies_width = (280.0 if not compact else 260.0) * scale_factor
+	for control in [health_plate, wave_plate, currency_row]: control.scale = Vector2.ONE * scale_factor
 	_place(health_plate, Rect2(margin, 22, health_width, 54))
-	_place(wave_plate, Rect2((width - wave_width) / 2, 90 if stacked else 22, wave_width, 54))
-	_place(currency_row, Rect2(width - margin - currencies_width, 22, currencies_width, 54))
-	var map_width = 188.0 if not stacked else 152.0
+	_place(wave_plate, Rect2((width - wave_width * scale_factor) / 2, 90 if stacked else 22, wave_width, 54))
+	_place(currency_row, Rect2(width - margin - currencies_width, 22, currencies_width / scale_factor, 54))
+	var map_width = minf(width * 0.33, (188.0 if not stacked else 152.0) * float(game.pref("map_size")))
 	_place(minimap_frame, Rect2(width - margin - map_width, 162 if stacked else 100, map_width, (map_width - 24) * 0.75 + 24))
 	hud_bar.offset_bottom = 146 if stacked else 78
 	health.custom_minimum_size.x = 130 if not compact else 70
@@ -227,8 +235,8 @@ func _style(background: Color, border: Color, radius: int, padding: int) -> Styl
 func _label(text: String, font_size: int = 18, color: Color = Color("e3ecf7")) -> Label:
 	var label = Label.new()
 	label.text = text
-	label.add_theme_font_size_override("font_size", font_size)
-	label.add_theme_color_override("font_color", color)
+	label.add_theme_font_size_override("font_size", roundi(font_size * float(game.pref("text_scale"))))
+	label.add_theme_color_override("font_color", Color.WHITE if game.pref("high_contrast") and color == MUTED else color)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return label
 
@@ -242,8 +250,11 @@ func _button(parent: Node, text: String, callback: Callable, id: String = "") ->
 	var button = Button.new()
 	button.text = text
 	button.custom_minimum_size.y = 48
+	button.add_theme_font_size_override("font_size", roundi(18 * float(game.pref("text_scale"))))
 	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	button.pressed.connect(callback)
+	button.pressed.connect(func():
+		if not game.test_mode: game.audio.effect("ui"))
 	parent.add_child(button)
 	if id != "":
 		button.name = id
@@ -385,17 +396,24 @@ func update_hud() -> void:
 	var remaining = int(ceil(game.run_time if game.mode == "timeattack" else game.wave_time))
 	hud_stats.text = "WELLE %02d" % game.wave
 	timer_text.text = "BOSS" if game.boss_wave else "%02d:%02d" % [remaining / 60, remaining % 60]
+	if game.goal_unlocked: timer_text.text = "DRUCK %02d" % maxi(1, game.overtime_level)
 	hp_text.text = "%d / %d" % [maxi(0, game.hp), game.max_hp]
 	point_text.text = str(game.points)
 	gold_text.text = str(game.store.data.gold)
-	clock.fraction = float(remaining) / (600.0 if game.mode == "timeattack" else minf(90, 20 + (game.wave - 1) * 2))
+	clock.fraction = float(remaining) / (600.0 if game.mode == "timeattack" else minf(90, 20 + (game.wave - 1) * 2) * float(game.run_pref("wave_duration")))
 	clock.queue_redraw()
 	health.max_value = game.max_hp
 	health.value = game.hp
 	var fog_active = game.modifier == "fog" and game.state == "playing"
 	hud_bar.visible = not fog_active
-	minimap.visible = not fog_active
-	minimap_frame.visible = not fog_active
+	health_plate.visible = bool(game.pref("show_health"))
+	wave_plate.visible = bool(game.pref("show_timer"))
+	point_text.get_parent().get_parent().visible = bool(game.pref("show_currency"))
+	gold_text.get_parent().get_parent().visible = bool(game.pref("show_currency"))
+	minimap.visible = not fog_active and bool(game.pref("show_minimap"))
+	minimap_frame.visible = minimap.visible
+	hud_bar.modulate.a = float(game.pref("hud_opacity"))
+	minimap_frame.modulate.a = float(game.pref("hud_opacity"))
 	fog.visible = fog_active
 	fog_pause.visible = fog_active
 
@@ -410,7 +428,7 @@ func pause_screen() -> void:
 	var resume = _button(run, "FORTSETZEN   →", game.resume_run, "resume")
 	resume.custom_minimum_size.y = 74
 	resume.add_theme_stylebox_override("normal", _style(Color("153c48"), ACCENT, 10, 14))
-	_button(run, "Run neu starten", game.start_run, "restart")
+	_button(run, "Run neu starten", request_restart, "restart")
 	_button(run, "Zur Charakterauswahl", game.show_hub, "quit_run")
 	var modules = _pause_panel(panels, "EINSTELLUNGEN & INFORMATIONEN")
 	var cards = GridContainer.new()
@@ -419,9 +437,11 @@ func pause_screen() -> void:
 	cards.add_theme_constant_override("v_separation", 10)
 	modules.add_child(cards)
 	_pause_card(cards, "AUDIO", "Musik · Lautstärke · Effekte", func(): open_options("paused", "audio"), "pause_audio", AMBER)
-	_pause_card(cards, "ANZEIGE", "Lebensbalken · Vollbild", func(): open_options("paused", "display"), "pause_display", ACCENT)
+	_pause_card(cards, "GRAFIK", "Fenster · Effekte · Leistung", func(): open_options("paused", "display"), "pause_display", ACCENT)
 	_pause_card(cards, "STEUERUNG", "Tasten · Eingabe", func(): open_options("paused", "controls"), "pause_controls", Color("a3b9e5"))
 	_pause_card(cards, "KOMPENDIUM", "Gegner · Objekte", func(): compendium_screen("paused"), "pause_compendium", Color("84cdbb"))
+	_pause_card(cards, "HUD", "Anzeigen · Minikarte", func(): open_options("paused", "hud"), "pause_hud", Color("84cdbb"))
+	_pause_card(cards, "BARRIEREFREIHEIT", "Kontrast · Bewegung", func(): open_options("paused", "accessibility"), "pause_accessibility", Color("ddafe1"))
 	_button(modules, "Alle Einstellungen", func(): open_options("paused"), "options")
 	_text(box, "STATUS & BUILD", 14, ACCENT)
 	var overview = GridContainer.new()
@@ -458,7 +478,8 @@ func _pause_card(parent: Node, title: String, detail: String, action: Callable, 
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	button.custom_minimum_size.y = 74
 	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	button.add_theme_font_size_override("font_size", 16)
+	button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	button.add_theme_font_size_override("font_size", roundi(16 * float(game.pref("text_scale"))))
 	button.add_theme_color_override("font_color", color)
 	button.add_theme_stylebox_override("normal", _style(Color("142631"), color.darkened(0.55), 8, 12))
 	button.add_theme_stylebox_override("hover", _style(Color("1c3543"), color, 8, 12))
@@ -515,88 +536,79 @@ func return_from_compendium() -> void:
 		game.show_hub()
 
 func open_options(origin: String, section: String = "all") -> void:
+	if not options_active:
+		options_draft = game.store.data.settings.duplicate(true)
+		options_active = true
 	options_origin = origin
-	options_section = section
+	options_section = section if section == "all" or Preferences.CATEGORIES.has(section) else "all"
 	game.state = "options"
-	var titles = {"all": "Optionen", "audio": "Audio", "display": "Anzeige", "controls": "Steuerung"}
-	var box = _menu(titles.get(section, "Optionen"), "Passe dein Spielerlebnis an.")
-	var tabs = HBoxContainer.new()
-	tabs.add_theme_constant_override("separation", 10)
-	box.add_child(tabs)
-	for item in [["all", "Alle"], ["audio", "Audio"], ["display", "Anzeige"], ["controls", "Steuerung"]]:
-		var category = str(item[0])
-		var tab = _button(tabs, item[1], func(): open_options(origin, category), "tab_" + category)
-		tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		tab.disabled = category == section
-	if section in ["all", "audio"]:
-		_text(box, "AUDIO", 14, AMBER)
-		for item in [["music", "Musik"], ["sound", "Soundeffekte"]]:
-			_setting_toggle(box, item[0], item[1])
-		for item in [["volume", "Musik-Lautstärke"], ["sfx_volume", "Effekt-Lautstärke"]]:
-			var key = str(item[0])
-			_text(box, item[1], 16)
-			var slider = HSlider.new()
-			slider.min_value = 0.0
-			slider.max_value = 1.0
-			slider.step = 0.01
-			slider.value = game.store.data.settings.get(key, 0.7)
-			slider.value_changed.connect(func(value): game.store.data.settings[key] = value; _save_options())
-			box.add_child(slider)
-		var song = OptionButton.new()
-		var song_ids = game.audio.TRACKS.keys()
-		for id in song_ids: song.add_item(game.audio.TRACKS[id])
-		song.select(maxi(0, song_ids.find(game.store.data.settings.get("song", "sternenlauf"))))
-		song.item_selected.connect(func(index): game.store.data.settings.song = song_ids[index]; _save_options())
-		box.add_child(song)
-	if section in ["all", "display"]:
-		_text(box, "ANZEIGE", 14, ACCENT)
-		_setting_toggle(box, "enemy_bars", "Gegner-Lebensbalken")
-		var fullscreen = CheckButton.new()
-		fullscreen.text = "Vollbild"
-		fullscreen.button_pressed = DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
-		fullscreen.toggled.connect(func(value): DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if value else DisplayServer.WINDOW_MODE_WINDOWED))
-		box.add_child(fullscreen)
-	if section in ["all", "controls"]:
-		_text(box, "STEUERUNG", 14, Color("a3b9e5"))
-		_text(box, "WASD / Pfeile / linker Stick / Ziehen mit Maus oder Touch.\nPause: P / Esc / Start. Dash: Shift / X ab Tempo-Level 10.", 15)
-		var keys = GridContainer.new()
-		keys.columns = 3 if root.size.x >= 900 else 2
-		box.add_child(keys)
-		var names = {"move_up": "Hoch", "move_down": "Runter", "move_left": "Links", "move_right": "Rechts", "pause_run": "Pause", "dash": "Dash"}
-		for action in game.DEFAULT_KEYS:
-			var action_id = str(action)
-			var key = int(game.store.data.settings.get("keys", {}).get(action, game.DEFAULT_KEYS[action]))
-			var button = _button(keys, "%s: %s" % [names[action], OS.get_keycode_string(key)], func():
-				if root.get_viewport().gui_get_focus_owner() != null: root.get_viewport().gui_get_focus_owner().release_focus()
-				rebind_action = action_id
-				toast("Neue Taste drücken · Esc bricht ab"), "bind_" + action)
-			button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		_button(box, "Standardbelegung wiederherstellen", func():
-			for action in game.DEFAULT_KEYS: game.bind_key(action, game.DEFAULT_KEYS[action], false)
-			game.store.save_progress()
-			open_options(origin, section), "reset_binds")
-	_button(box, "Zurück", return_from_options, "back_options")
-	_focus_first()
+	options_editor.build()
 
-func _setting_toggle(parent: Node, key: String, title: String) -> void:
-	var toggle = CheckButton.new()
-	toggle.text = title
-	toggle.button_pressed = game.store.data.settings.get(key, true)
-	toggle.toggled.connect(func(value): game.store.data.settings[key] = value; _save_options())
-	parent.add_child(toggle)
+func dirty_options_count() -> int:
+	var count = 0
+	for key in options_draft:
+		if options_draft[key] != game.store.data.settings.get(key): count += 1
+	return count
 
-func _save_options() -> void:
-	game.store.save_progress()
-	if not game.test_mode:
-		game.audio.apply_settings(game.store.data.settings)
+func stage_key(action: String, key: int) -> String:
+	if key in [KEY_ESCAPE, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT]:
+		return "Diese Taste bleibt als feste Alternative reserviert."
+	for other in options_draft["keys"]:
+		if other != action and int(options_draft["keys"][other]) == key:
+			return "Taste bereits belegt · Bitte eine andere Taste wählen."
+	options_draft["keys"][action] = key
+	return ""
+
+func apply_options() -> bool:
+	var previous = game.store.data.settings.duplicate(true)
+	game.store.data.settings = Preferences.normalize(options_draft)
+	if not game.store.save_progress():
+		game.store.data.settings = previous
+		toast("Speichern fehlgeschlagen. Deine Änderungen bleiben im Entwurf.", true)
+		return false
+	options_draft = game.store.data.settings.duplicate(true)
+	game.apply_preferences()
+	options_editor.build()
+	toast("Einstellungen übernommen · Balance gilt ab dem nächsten Run", true)
+	return true
 
 func return_from_options() -> void:
 	rebind_action = ""
+	if dirty_options_count() > 0:
+		var box = _menu("Änderungen übernehmen?", "Deine Einstellungen wurden noch nicht angewendet.")
+		_button(box, "Anwenden und zurück", func():
+			if apply_options(): close_options(), "apply_and_back")
+		_button(box, "Verwerfen und zurück", close_options, "discard_and_back")
+		_button(box, "Weiter bearbeiten", func(): open_options(options_origin, options_section), "keep_editing")
+		_focus_first()
+		return
+	close_options()
+
+func close_options() -> void:
+	options_active = false
+	options_draft.clear()
 	if options_origin == "paused":
 		game.state = "paused"
 		pause_screen()
 	else:
 		game.show_hub()
+
+func apply_preferences() -> void:
+	var contrast = bool(game.pref("high_contrast"))
+	root.theme.default_font_size = roundi(18 * float(game.pref("text_scale")))
+	root.theme.set_color("font_color", "Label", Color.WHITE if contrast else Color("e3ecf7"))
+	root.theme.set_stylebox("normal", "Button", _style(Color("121e2d"), Color("98b9cb") if contrast else Color("30465d"), 10, 14))
+	_layout_hud()
+	if game.state == "playing": update_hud()
+
+func request_restart() -> void:
+	if not game.pref("confirm_restart"):
+		game.start_run()
+		return
+	var box = _menu("Run neu starten?", "Der Fortschritt dieses Runs wird verworfen. Deine Freischaltungen bleiben erhalten.")
+	_button(box, "Neuen Run starten", game.start_run, "confirm_restart")
+	_button(box, "Zurück zur Pause", pause_screen, "cancel_restart")
+	_focus_first()
 
 func monument_screen() -> void:
 	var box = _menu("Schaltmodul aktiviert", "Wähle eine Systemmodifikation. Nutzen und Risiken gelten für diesen Run.")
@@ -616,7 +628,8 @@ func monument_screen() -> void:
 			game.resume_run(), "choice_" + str(i))
 	_focus_first()
 
-func toast(text: String) -> void:
+func toast(text: String, essential: bool = false) -> void:
+	if not essential and not game.pref("notifications"): return
 	toast_time = 3.0
 	toast_label.text = text
 	toast_label.show()
@@ -625,7 +638,7 @@ func _process(delta: float) -> void:
 	if root.size != last_hud_size:
 		_layout_hud()
 	if fog.visible:
-		fog.material.set_shader_parameter("mist_time", game.elapsed)
+		fog.material.set_shader_parameter("mist_time", game.elapsed if game.pref("animate_fog") and not game.pref("reduce_motion") else 0.0)
 		fog.material.set_shader_parameter("view_size", root.size)
 		fog.material.set_shader_parameter("world_offset", game.arena.camera.position)
 	if game.state == "title" and is_instance_valid(title_background):

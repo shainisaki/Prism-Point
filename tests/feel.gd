@@ -119,8 +119,8 @@ func run() -> void:
 	game.ui.buttons.pause_audio.pressed.emit()
 	expect(game.state == "options" and game.ui.options_section == "audio" and not game.ui.buttons.has("bind_move_up"), "Audio module opens only audio settings")
 	var music_before = game.store.data.settings.music
-	for toggle in game.ui.overlay.find_children("*", "CheckButton", true, false):
-		if toggle.text == "Musik": toggle.button_pressed = not toggle.button_pressed
+	game.ui.options_editor.fields.music.button_pressed = not music_before
+	game.ui.apply_options()
 	expect(game.store.data.settings.music != music_before, "Audio module toggles and saves the real music setting")
 	game.ui.buttons.back_options.pressed.emit()
 	expect(game.state == "paused" and game.wave_time == timer and game.hp == health, "Settings return to the same frozen run")
@@ -130,6 +130,7 @@ func run() -> void:
 	game.ui.buttons.pause_controls.pressed.emit()
 	game.bind_key("move_up", KEY_I)
 	game.ui.buttons.reset_binds.pressed.emit()
+	game.ui.apply_options()
 	expect(game.store.data.settings["keys"].move_up == KEY_W and game.ui.options_section == "controls", "Control module restores bindings without leaving its category")
 	game.ui.return_from_options()
 	game.ui.buttons.pause_compendium.pressed.emit()
