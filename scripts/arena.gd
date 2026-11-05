@@ -2,6 +2,12 @@ extends Node2D
 ## Native world simulation and vector rendering. All movement uses seconds.
 
 const SIZE = Vector2(4800, 3600)
+const Layout = preload("res://scripts/arena_layout.gd")
+const HEART_DROP_CHANCE = 0.08
+const MONUMENT_RADIUS = 360.0
+const MONUMENT_WALL_WIDTH = 32.0
+const MONUMENT_GATE_WIDTH = 200.0
+const DISCOVERY_SCALE = 10.0
 const ENEMY_DATA = {
 	"runner": [10.0, 2.6, 4.0, "ff5555"], "tank": [16.0, 0.9, 14.0, "aa3333"],
 	"shooter": [16.0, 1.35, 7.0, "ff8844"], "dasher": [11.0, 2.9, 4.0, "292939"],
@@ -15,6 +21,9 @@ var player_radius := 14.0
 var facing := Vector2.RIGHT
 var camera: Camera2D
 var walls: Array[Rect2] = []
+var monument_walls: Array[Dictionary] = []
+var layout_theme := ""
+var structure_kinds: Array[String] = []
 var hazards: Array[Rect2] = []
 var enemies: Array[Dictionary] = []
 var bullets: Array[Dictionary] = []
@@ -22,6 +31,7 @@ var enemy_bullets: Array[Dictionary] = []
 var pickups: Array[Dictionary] = []
 var warnings: Array[Dictionary] = []
 var particles: Array[Dictionary] = []
+var floating_texts: Array[Dictionary] = []
 var objects: Array[Dictionary] = []
 var lasers: Array[Dictionary] = []
 var floor_dots: Array[Vector2] = []
@@ -29,7 +39,9 @@ var goal := Vector2.ZERO
 var route := PackedVector2Array()
 var grid := AStarGrid2D.new()
 var reachable: Array[Vector2i] = []
-var visited: Dictionary = {}
+var discovery: Image
+var discovery_texture: ImageTexture
+var last_revealed_rect := Rect2i()
 var shot_cd := 0.0
 var spawn_cd := 1.0
 var dash_cd := 0.0
@@ -52,6 +64,7 @@ func _ready() -> void:
 	camera.limit_right = int(SIZE.x)
 	camera.limit_bottom = int(SIZE.y)
 	crystal_texture = load("res://assets/images/crystal.png")
+	reset_discovery()
 
 func _process(_delta: float) -> void:
 	queue_redraw()
@@ -87,9 +100,9 @@ func _notification(what: int) -> void:
 			game.pause_run()
 
 func generate_wave() -> void:
-	for collection in [walls, hazards, enemies, bullets, enemy_bullets, pickups, warnings, particles, objects, lasers, reachable, floor_dots]:
+	for collection in [walls, monument_walls, hazards, enemies, bullets, enemy_bullets, pickups, warnings, particles, floating_texts, objects, lasers, reachable, floor_dots]:
 		collection.clear()
-	visited.clear()
+	reset_discovery()
 	release_pointer()
 	player_radius = float(game.character().radius)
 	shot_cd = 0.0
@@ -97,42 +110,25 @@ func generate_wave() -> void:
 	laser_event_cd = 3.0
 	dash_cd = 0.0
 	dash_left = 0.0
-	walls.assign([Rect2(0, 0, SIZE.x, 28), Rect2(0, SIZE.y - 28, SIZE.x, 28), Rect2(0, 0, 28, SIZE.y), Rect2(SIZE.x - 28, 0, 28, SIZE.y)])
-	# Open room clusters leave continuous corridors; navigation validates access.
-	for y in 3:
-		for x in 4:
-			var center = Vector2(600 + x * 1150, 600 + y * 1150)
-			var offset = Vector2(randf_range(-120, 120), randf_range(-120, 120))
-			var p = center + offset
-			var shape = randi() % 4
-			if shape == 0:
-				walls.append(Rect2(p - Vector2(220, 160), Vector2(300, 28)))
-				walls.append(Rect2(p - Vector2(220, 160), Vector2(28, 260)))
-			elif shape == 1:
-				walls.append(Rect2(p - Vector2(210, 130), Vector2(180, 28)))
-				walls.append(Rect2(p + Vector2(70, -130), Vector2(180, 28)))
-				walls.append(Rect2(p + Vector2(210, -130), Vector2(28, 210)))
-			elif shape == 2:
-				for i in 3:
-					walls.append(Rect2(p + Vector2(i * 110 - 110, -100), Vector2(44, 56)))
-			else:
-				walls.append(Rect2(p - Vector2(160, 160), Vector2(28, 260)))
-				walls.append(Rect2(p + Vector2(70, 70), Vector2(220, 28)))
-	grid.region = Rect2i(0, 0, 48, 36)
-	grid.cell_size = Vector2(100, 100)
-	grid.offset = Vector2(50, 50)
+	var layout = Layout.generate(layout_theme)
+	layout_theme = layout.theme
+	walls.assign(layout.walls)
+	structure_kinds.assign(layout.structures)
+	if not game.boss_wave:
+		place_old_monument()
+	grid.region = Rect2i(0, 0, 96, 72)
+	grid.cell_size = Vector2(50, 50)
+	grid.offset = Vector2(25, 25)
 	grid.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
 	grid.update()
-	for y in 36:
-		for x in 48:
+	var open_cells: Array[Vector2i] = []
+	for y in 72:
+		for x in 96:
 			var cell = Vector2i(x, y)
 			grid.set_point_solid(cell, blocked(grid.get_point_position(cell), 57.0))
-	var start = Vector2i(24, 18)
-	if grid.is_point_solid(start):
-		for y in range(10, 25):
-			for x in range(16, 32):
-				if not grid.is_point_solid(Vector2i(x, y)):
-					start = Vector2i(x, y)
+			if not grid.is_point_solid(cell):
+				open_cells.append(cell)
+	var start = open_cells.pick_random()
 	player = grid.get_point_position(start)
 	# Flood-fill once instead of running A* for each prospective pickup.
 	var queue: Array[Vector2i] = [start]
@@ -180,7 +176,6 @@ func generate_wave() -> void:
 					break
 				p = random_open(400)
 			objects.append({"kind": "monument", "p": p, "r": 35.0, "activated": [], "used": false})
-		objects.append({"kind": "old", "p": random_open(600), "r": 60.0, "charge": 0.0, "used": false})
 		objects.append({"kind": "switch", "p": random_open(300), "r": 20.0, "used": false})
 		if game.modifier == "elite":
 			spawn_boss(BOSS_KINDS.pick_random(), true)
@@ -189,12 +184,61 @@ func generate_wave() -> void:
 				spawn_enemy("lootling", random_spawn())
 	camera.position = player
 	camera.reset_smoothing()
+	camera.force_update_scroll()
+	reveal_view()
+
+func place_old_monument() -> void:
+	var center = Vector2(randf_range(650, SIZE.x - 650), randf_range(650, SIZE.y - 650))
+	var footprint = Rect2(center - Vector2.ONE * (MONUMENT_RADIUS + 130), Vector2.ONE * (MONUMENT_RADIUS + 130) * 2)
+	# Reserve a whole clearing so all three entrances open onto usable terrain.
+	for i in range(walls.size() - 1, 3, -1):
+		if walls[i].intersects(footprint):
+			walls.remove_at(i)
+	var object = {"kind": "old", "p": center, "r": 95.0, "radius": MONUMENT_RADIUS, "charge": 0.0, "used": false}
+	objects.append(object)
+	var vertices = polygon(center, MONUMENT_RADIUS, 3, -PI / 2)
+	for i in 3:
+		var a = vertices[i]
+		var b = vertices[(i + 1) % 3]
+		var middle = (a + b) / 2
+		var direction = (b - a).normalized()
+		monument_walls.append({"a": a, "b": middle - direction * MONUMENT_GATE_WIDTH / 2, "width": MONUMENT_WALL_WIDTH})
+		monument_walls.append({"a": middle + direction * MONUMENT_GATE_WIDTH / 2, "b": b, "width": MONUMENT_WALL_WIDTH})
+
+func reset_discovery() -> void:
+	discovery = Image.create(int(SIZE.x / DISCOVERY_SCALE), int(SIZE.y / DISCOVERY_SCALE), false, Image.FORMAT_RGBA8)
+	discovery.fill(Color(0.015, 0.025, 0.035, 1))
+	discovery_texture = ImageTexture.create_from_image(discovery)
+	last_revealed_rect = Rect2i()
+
+func visible_world_rect() -> Rect2:
+	var extent = get_viewport_rect().size / camera.zoom
+	return Rect2(camera.get_screen_center_position() - extent / 2, extent).intersection(Rect2(Vector2.ZERO, SIZE))
+
+func reveal_view() -> void:
+	var view = visible_world_rect()
+	var begin = Vector2i((view.position / DISCOVERY_SCALE).floor())
+	var end = Vector2i((view.end / DISCOVERY_SCALE).ceil())
+	var rectangle = Rect2i(begin, end - begin).intersection(Rect2i(Vector2i.ZERO, discovery.get_size()))
+	if rectangle == last_revealed_rect:
+		return
+	last_revealed_rect = rectangle
+	discovery.fill_rect(rectangle, Color.TRANSPARENT)
+	discovery_texture.update(discovery)
+
+func is_discovered(p: Vector2) -> bool:
+	var point = Vector2i(p / DISCOVERY_SCALE)
+	return Rect2i(Vector2i.ZERO, discovery.get_size()).has_point(point) and discovery.get_pixelv(point).a < 0.5
 
 func random_open(min_distance: float = 0.0) -> Vector2:
 	var p = player
 	for attempt in 100:
 		p = grid.get_point_position(reachable.pick_random())
-		if p.distance_to(player) >= min_distance:
+		var reserved = false
+		for object in objects:
+			if object.kind == "old" and p.distance_to(object.p) < MONUMENT_RADIUS + 120:
+				reserved = true
+		if not reserved and p.distance_to(player) >= min_distance:
 			break
 	return p
 
@@ -221,6 +265,9 @@ func random_spawn() -> Vector2:
 func blocked(p: Vector2, radius: float) -> bool:
 	for wall in walls:
 		if circle_rect(p, radius, wall):
+			return true
+	for segment in monument_walls:
+		if Geometry2D.get_closest_point_to_segment(p, segment.a, segment.b).distance_to(p) < radius + segment.width / 2:
 			return true
 	return false
 
@@ -250,6 +297,9 @@ func move_circle(p: Vector2, movement: Vector2, radius: float, include_objects: 
 	return p.clamp(Vector2.ONE * (radius + 28), SIZE - Vector2.ONE * (radius + 28))
 
 func line_clear(a: Vector2, b: Vector2) -> bool:
+	for segment in monument_walls:
+		if Geometry2D.segment_intersects_segment(a, b, segment.a, segment.b) != null:
+			return false
 	for wall in walls:
 		if Geometry2D.segment_intersects_segment(a, b, wall.position, Vector2(wall.end.x, wall.position.y)) != null or Geometry2D.segment_intersects_segment(a, b, Vector2(wall.end.x, wall.position.y), wall.end) != null or Geometry2D.segment_intersects_segment(a, b, wall.end, Vector2(wall.position.x, wall.end.y)) != null or Geometry2D.segment_intersects_segment(a, b, Vector2(wall.position.x, wall.end.y), wall.position) != null:
 			return false
@@ -275,7 +325,8 @@ func simulate(delta: float) -> void:
 	camera.position = player
 	shake = move_toward(shake, 0.0, delta * 25)
 	camera.offset = Vector2(randf_range(-shake, shake), randf_range(-shake, shake))
-	visited[Vector2i(player / 100)] = true
+	camera.force_update_scroll()
+	reveal_view()
 	shot_cd -= delta
 	if shot_cd <= 0:
 		if shoot():
@@ -324,6 +375,11 @@ func simulate(delta: float) -> void:
 		particles[i].p += particles[i].v * delta
 		if particles[i].life <= 0:
 			particles.remove_at(i)
+	for i in range(floating_texts.size() - 1, -1, -1):
+		floating_texts[i].life -= delta
+		floating_texts[i].p.y -= 42.0 * delta
+		if floating_texts[i].life <= 0:
+			floating_texts.remove_at(i)
 
 func pick_enemy_type() -> String:
 	if game.modifier == "swarm":
@@ -371,9 +427,9 @@ func spawn_boss(kind: String = "", elite: bool = false) -> void:
 			if walls[i].get_center().distance_to(center) < 450:
 				walls.remove_at(i)
 		for i in 6:
-			var node = boss_dictionary("endboss_node", center + Vector2.from_angle(TAU * i / 6.0) * 220, 36, 120, Color.WHITE, false)
+			var node = boss_dictionary("endboss_node", center + Vector2.from_angle(TAU * i / 6.0) * 220, 36, 240, Color.WHITE, false)
 			enemies.append(node)
-		enemies.append(boss_dictionary(kind, center, 70, 1000, Color.WHITE, false))
+		enemies.append(boss_dictionary(kind, center, 70, 2000, Color.WHITE, false))
 		player = center + Vector2(0, 420)
 		return
 	var colors = {"hexagon": Color("c070ff"), "triangle": Color("ff6644"), "square": Color("44aaff"), "cylinder": Color("8b5a2b")}
@@ -391,7 +447,7 @@ func spawn_boss(kind: String = "", elite: bool = false) -> void:
 
 func boss_dictionary(kind: String, p: Vector2, radius: float, health: float, color: Color, elite: bool) -> Dictionary:
 	var result = {"id": next_id, "kind": kind, "p": p, "r": radius, "hp": health, "max_hp": health, "color": color, "flash": 0.0,
-		"speed": 90.0, "boss": true, "elite": elite, "cd": 1.5, "age": 0.0, "nav_cd": 0.0, "path": PackedVector2Array(), "dash": 0.0, "velocity": Vector2.ZERO, "invisible": false}
+		"speed": 90.0, "boss": true, "elite": elite, "cd": 1.5, "age": 0.0, "roll": 0.0, "nav_cd": 0.0, "path": PackedVector2Array(), "dash": 0.0, "velocity": Vector2.ZERO, "invisible": false}
 	next_id += 1
 	return result
 
@@ -500,6 +556,8 @@ func update_boss(enemy: Dictionary, delta: float) -> void:
 	elif kind == "cylinder":
 		var before = enemy.p
 		enemy.p = move_circle(enemy.p, enemy.velocity * delta, enemy.r)
+		# Rotate in proportion to actual travel, including reversing on impact.
+		enemy.roll += (enemy.p.x - before.x) / (enemy.r * 0.68)
 		if absf(enemy.p.x - before.x) < 0.1:
 			enemy.velocity.x = -enemy.velocity.x
 			shake = 6.0
@@ -610,6 +668,8 @@ func damage_enemy(enemy: Dictionary, amount: float) -> void:
 	burst(enemy.p, enemy.color, 16)
 	game.register_kill(enemy.p)
 	pickups.append({"p": enemy.p, "value": 1, "kind": "point"})
+	if randf() < HEART_DROP_CHANCE:
+		pickups.append({"p": enemy.p + Vector2(12, 0), "value": 1, "kind": "heart"})
 	if enemy.kind == "splitter":
 		for i in 2:
 			var child = spawn_enemy("runner", enemy.p + Vector2(i * 22 - 11, 0))
@@ -670,11 +730,16 @@ func update_pickups(delta: float) -> void:
 	for i in range(pickups.size() - 1, -1, -1):
 		var pickup = pickups[i]
 		var distance = pickup.p.distance_to(player)
+		if pickup.kind == "heart" and game.hp >= game.max_hp:
+			continue
 		if distance < magnet:
 			pickup.p = pickup.p.move_toward(player, (180 + (magnet - distance) * 3) * delta)
 		if pickup.p.distance_to(player) < player_radius + 8:
 			if pickup.kind == "pierce":
 				game.pierce = true
+			elif pickup.kind == "heart":
+				game.hp = mini(game.max_hp, game.hp + 1)
+				burst(player, Color("ff526a"), 8)
 			else:
 				game.points += maxi(1, int(pickup.value + floor(game.stats.resource * 0.6) + game.character().resource + (1 if game.focus == "economy" else 0))) * game.resource_mult
 			pickups.remove_at(i)
@@ -700,7 +765,7 @@ func update_objects(delta: float) -> void:
 				var key = game.stats.keys().pick_random()
 				apply_stat(key, 1.0 if key in ["vitality", "armor"] else [0.25, 0.5, 0.75].pick_random())
 		elif object.kind == "old":
-			object.charge = clampf(object.charge + delta * (1.0 if player.distance_to(object.p) < 60 else -1.1), 0, 2.4)
+			object.charge = clampf(object.charge + delta * (1.0 if player.distance_to(object.p) < object.r else -1.1), 0, 2.4)
 			if object.charge >= 2.4:
 				object.used = true
 				game.state = "monument"
@@ -756,12 +821,17 @@ func _draw() -> void:
 		draw_rect(wall, Color("303a44"))
 		draw_rect(wall, Color("586573"), false, 2)
 		draw_line(wall.position + Vector2(2, 2), Vector2(wall.end.x - 2, wall.position.y + 2), Color("6b7782"), 2)
+	for segment in monument_walls:
+		draw_line(segment.a + Vector2(6, 8), segment.b + Vector2(6, 8), Color(0, 0, 0, 0.5), segment.width + 8, true)
+		draw_line(segment.a, segment.b, Color("56636a"), segment.width, true)
+		draw_line(segment.a, segment.b, Color("85918e"), segment.width - 8, true)
+		draw_line(segment.a, segment.b, Color("424d50"), 3, true)
 	var goal_color = Color("5dffc0") if game.goal_unlocked else Color("526476")
 	draw_arc(goal, 36 + sin(game.elapsed * 3) * 3, 0, TAU, 48, Color(goal_color, 0.5), 2, true)
 	draw_colored_polygon(polygon(goal, 22, 6, game.elapsed * 0.4), goal_color)
 	draw_string(ThemeDB.fallback_font, goal + Vector2(-22, -48), "SHOP", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, goal_color)
 	for object in objects:
-		if not visible.has_point(object.p) or object.get("hp", 1) <= 0:
+		if not visible.grow(MONUMENT_RADIUS if object.kind == "old" else 150).has_point(object.p) or object.get("hp", 1) <= 0:
 			continue
 		draw_object(object)
 	for warning in warnings:
@@ -770,7 +840,10 @@ func _draw() -> void:
 		draw_line(warning.p - Vector2(-6, 6), warning.p + Vector2(-6, 6), Color("ff6b6b"), 2)
 	for pickup in pickups:
 		if visible.has_point(pickup.p):
-			glow(pickup.p, 5 if pickup.kind == "point" else 10, Color("6ebeff") if pickup.kind == "point" else Color("e8b0ff"))
+			if pickup.kind == "heart":
+				draw_heart(pickup.p + Vector2(0, sin(game.elapsed * 4) * 2))
+			else:
+				glow(pickup.p, 5 if pickup.kind == "point" else 10, Color("6ebeff") if pickup.kind == "point" else Color("e8b0ff"))
 	for enemy in enemies:
 		if not visible.has_point(enemy.p) or enemy.hp <= 0:
 			continue
@@ -796,8 +869,12 @@ func _draw() -> void:
 		draw_arc(player, player_radius + 5, 0, TAU, 40, Color(player_color, 0.15), 5, true)
 		draw_circle(player, player_radius, player_color)
 		draw_line(player, player + facing * (player_radius + 8), Color("75d4ff"), 5, true)
-	if game.modifier == "fog":
-		draw_arc(player, 380, 0, TAU, 90, Color(0.01, 0.02, 0.03, 0.9), 500, true)
+	for popup in floating_texts:
+		var alpha = clampf(popup.life / 0.4, 0, 1)
+		var font = ThemeDB.fallback_font
+		var origin = popup.p - Vector2(font.get_string_size(popup.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 23).x / 2, 0)
+		draw_string_outline(font, origin, popup.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 23, 6, Color(0.06, 0.04, 0, alpha))
+		draw_string(font, origin, popup.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 23, Color(1, 0.85, 0.15, alpha))
 
 func draw_enemy(enemy: Dictionary) -> void:
 	var color = Color.WHITE if enemy.flash > 0 else enemy.color
@@ -813,10 +890,7 @@ func draw_enemy(enemy: Dictionary) -> void:
 		draw_polyline(vertices, color, 3, true)
 		draw_circle(enemy.p, 4, color)
 	elif kind == "cylinder":
-		var hop = absf(sin(enemy.age * 3)) * 18
-		draw_rect(Rect2(enemy.p - Vector2(enemy.r, 28 + hop), Vector2(enemy.r * 2, 56)), color)
-		draw_arc(enemy.p + Vector2(-enemy.r, -hop), 30, 0, TAU, 24, Color("efc89c"), 4, true)
-		draw_arc(enemy.p + Vector2(enemy.r, -hop), 30, 0, TAU, 24, Color("efc89c"), 4, true)
+		draw_barrel_boss(enemy, color)
 	else:
 		draw_circle(enemy.p, enemy.r, Color(color, 0.22))
 		draw_arc(enemy.p, enemy.r, 0, TAU, 28, color, 2.5, true)
@@ -850,11 +924,97 @@ func draw_object(object: Dictionary) -> void:
 				glow(satellite, 16, Color("ffd24a") if object.activated.has(i) else Color("5c5235"))
 			draw_colored_polygon(polygon(p, 36, 6, -PI / 2), Color("ffd24a") if object.used else Color("7e6b39"))
 		"old":
-			var vertices = polygon(p, 105, 3, -PI / 2)
+			var vertices = polygon(p, object.get("radius", MONUMENT_RADIUS), 3, -PI / 2)
 			for i in 3:
-				draw_line(vertices[i], vertices[(i + 1) % 3], Color("5c6068"), 14, true)
-				glow(vertices[i], 9, Color("ff9e42") if object.charge > i * 0.8 else Color("363d4a"))
-			draw_arc(p, 40, -PI / 2, -PI / 2 + TAU * maxf(0.01, object.charge / 2.4), 40, Color("ff9e42"), 3, true)
+				var flame = vertices[i].lerp(p, 0.18)
+				draw_circle(flame, 20, Color("272f2c"))
+				draw_arc(flame, 21, 0, TAU, 30, Color("56675d"), 3, true)
+				var amount = clampf((object.charge - i * 0.8) / 0.8, 0.0, 1.0)
+				draw_flame(flame, amount, i * 2.1)
+			draw_arc(p, object.r, 0, TAU, 64, Color("31483c"), 3, true)
+			draw_arc(p, object.r, -PI / 2, -PI / 2 + TAU * maxf(0.001, object.charge / 2.4), 64, Color("70ffa1"), 4, true)
+			if not object.used:
+				draw_string(ThemeDB.fallback_font, p + Vector2(-62, 5), "AKTIVIEREN", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("95bca0"))
 		"switch":
 			if object.used:
 				draw_circle(p, 15, Color("4dff8a"))
+
+func draw_flame(p: Vector2, amount: float, phase: float) -> void:
+	# A small green pilot flame grows into a full, animated tongue of fire.
+	var height = lerpf(16, 70, amount)
+	var time = game.elapsed * 7 + phase
+	var sway = sin(time) * 7
+	var outline = PackedVector2Array([p + Vector2(-15, 0), p + Vector2(-18, -height * 0.3), p + Vector2(-9 + sway * 0.4, -height * 0.65), p + Vector2(sway, -height), p + Vector2(10, -height * 0.5), p + Vector2(18, -height * 0.28), p + Vector2(14, 0)])
+	draw_circle(p - Vector2(0, height * 0.3), height * 0.7, Color(0.15, 1.0, 0.38, 0.07 + amount * 0.06))
+	draw_colored_polygon(outline, Color("22b85e"))
+	var inner = PackedVector2Array([p + Vector2(-10, -2), p + Vector2(-8, -height * 0.3), p + Vector2(sway * 0.4, -height * 0.72), p + Vector2(10, -height * 0.25), p + Vector2(9, -2)])
+	draw_colored_polygon(inner, Color("77ff9b"))
+	draw_colored_polygon(PackedVector2Array([p + Vector2(-5, -2), p + Vector2(0, -height * 0.4), p + Vector2(5, -2)]), Color("ceffe0"))
+
+func draw_heart(p: Vector2) -> void:
+	var points = PackedVector2Array()
+	for i in 48:
+		var t = TAU * i / 48
+		points.append(p + Vector2(16 * pow(sin(t), 3), -(13 * cos(t) - 5 * cos(2 * t) - 2 * cos(3 * t) - cos(4 * t))) * 0.65)
+	draw_circle(p, 18, Color(1, 0.15, 0.25, 0.1))
+	draw_colored_polygon(points, Color("ff3e5a"))
+	points.append(points[0])
+	draw_polyline(points, Color("ff9aaa"), 1.5, true)
+
+func barrel_outline(p: Vector2, half_width: float, half_height: float) -> PackedVector2Array:
+	var points = PackedVector2Array()
+	for i in 25:
+		var t = float(i) / 24
+		var y = lerpf(-half_height, half_height, t)
+		var width = half_width * (0.78 + sin(PI * t) * 0.22)
+		points.append(p + Vector2(width, y))
+	for i in 25:
+		var t = float(i) / 24
+		var y = lerpf(half_height, -half_height, t)
+		var width = half_width * (0.78 + sin(PI * t) * 0.22)
+		points.append(p + Vector2(-width, y))
+	return points
+
+func draw_barrel_boss(enemy: Dictionary, color: Color) -> void:
+	var p = enemy.p
+	var r = enemy.r
+	var half_width = r * 0.76
+	var half_height = r * 0.91
+	var roll = enemy.get("roll", 0.0)
+	# A vertical axle rolls horizontally: wood seams and a bung travel over the bulge.
+	var silhouette = barrel_outline(p, half_width, half_height)
+	draw_colored_polygon(silhouette, color.darkened(0.25))
+	for i in 16:
+		var a = roll + TAU * i / 16
+		if cos(a) <= 0:
+			continue
+		var seam = PackedVector2Array()
+		for j in 19:
+			var t = float(j) / 18
+			seam.append(p + Vector2(sin(a) * half_width * (0.78 + sin(PI * t) * 0.22), lerpf(-half_height, half_height, t)))
+		draw_polyline(seam, Color("e2af69").darkened((1 - cos(a)) * 0.65), 3, true)
+	# Thin cross highlights give the wooden body volume without hiding the grain.
+	for side in [-1, 1]:
+		var band_y = side * half_height * 0.63
+		var band_w = half_width * 0.96
+		var band = Rect2(p + Vector2(-band_w, band_y - 7), Vector2(band_w * 2, 14))
+		draw_rect(band, Color("414b51"))
+		draw_line(band.position, band.position + Vector2(band.size.x, 0), Color("b3babc"), 2, true)
+		draw_line(band.position + Vector2(0, 13), band.end, Color("20292e"), 2, true)
+		for rivet in [-0.65, 0.65]:
+			draw_circle(p + Vector2(band_w * rivet, band_y), 3, Color("b5b9b8"))
+	# Elliptical end caps, instead of two disconnected circles.
+	for side in [-1, 1]:
+		var cap = PackedVector2Array()
+		for i in 48:
+			var a = TAU * i / 48
+			cap.append(p + Vector2(cos(a) * half_width * 0.78, side * half_height + sin(a) * 13))
+		draw_colored_polygon(cap, Color("73512e") if side == -1 else Color("4e3927"))
+		cap.append(cap[0])
+		draw_polyline(cap, Color("b5b7ae"), 4, true)
+	if cos(roll) > 0:
+		var bung = p + Vector2(sin(roll) * half_width, 0)
+		draw_circle(bung, 8, Color("3e2c20"))
+		draw_arc(bung, 8, 0, TAU, 20, Color("d6b480"), 2, true)
+	silhouette.append(silhouette[0])
+	draw_polyline(silhouette, Color("d7b483"), 2, true)

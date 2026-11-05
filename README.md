@@ -4,6 +4,8 @@ Native 2D-Version für **Godot 4.6+**, entwickelt und geprüft mit Godot 4.6.3.
 Das Spiel verwendet GDScript, Godot-Controls, Camera2D, AudioStreamPlayer und
 AStarGrid2D. Es benötigt **keinen Browser, kein HTML und keinen Webserver**.
 
+Die neuesten Änderungen mit Bildern stehen im [Gameplay-Update](docs/GAMEPLAY_UPDATE.md).
+
 ## Öffnen und spielen
 
 1. Godot 4.6 oder neuer installieren (Standard-Version, .NET nicht nötig).
@@ -28,6 +30,18 @@ Gamepad bleiben als Alternativen verfügbar. Der erste Kauf legt den Build fest.
 Nach dem Wellen-Timer dem markierten Pfad zum Shop folgen. Boss-Wellen enden
 erst nach dem Sieg über den Boss. Gold schaltet dauerhaft Charaktere frei.
 
+HP bleiben beim Shopbesuch und Wellenwechsel erhalten. Besiegte Gegner haben
+eine **8%-Chance**, ein rotes Herz fallenzulassen: Aufsammeln heilt **1 HP**,
+bis zum Maximum. Bei vollen HP bleiben Herzen liegen. Nur ein neuer Run
+beginnt mit vollen HP; gezielte Vitalitäts-Upgrades können weiterhin heilen.
+
+Die Minikarte deckt den tatsächlich sichtbaren Kartenausschnitt dauerhaft auf;
+unbesuchte Bereiche bleiben verborgen und werden bei einer neuen Welle
+zurückgesetzt. Der Nebel-Modifier erzeugt weichen Dunst über die ganze Sicht
+und blendet HP, Timer, Punkte/Gold und Minikarte aus. Pause bleibt erreichbar.
+Statuswerte stehen ausschließlich im Pausenmenü, Combo-Zahlen erscheinen
+kurzzeitig gelb am besiegten Gegner.
+
 ## Übertragene Inhalte
 
 - Titelgrafiken, Kristallgrafik und alle drei Musikstücke aus dem Original;
@@ -43,6 +57,11 @@ erst nach dem Sieg über den Boss. Gold schaltet dauerhaft Charaktere frei.
   Hexagon-Duplikaten; Welle 20 mit sechs Endboss-Knoten und Kern.
 - Kisten, explosive Fässer, Kristalle, Satelliten-Monument, Altes Monument mit
   drei Offenbarungen, versteckter Shop-Schalter und sieben Wellen-Events.
+- Großes Dreiecksmonument mit kollidierenden Steinwänden, drei Eingängen und
+  grünen Flammen; zum Aktivieren innen auf dem zentralen Feld stehen bleiben.
+- Pro Welle neu angeordnete Wände mit neun Strukturen in vier wechselnden
+  Layout-Familien; Fassboss mit Holzdauben, Metallreifen und Rollanimation.
+  Endboss: 2000 Kern-HP und 240 HP je Knoten (+100% gegenüber der ersten Portierung).
 - Pause, Neustart, Game Over, Kompendium, Musik-/Effektlautstärke und
   native Speicherung von Gold, Freischaltungen, Rekorden und Einstellungen.
 
@@ -69,7 +88,8 @@ python3 tests/run.py
 ```
 
 Der Runner importiert Assets und führt echte GDScript-Integrationstests aus.
-Der aktuelle Stand besteht 52 Checks ohne Engine- oder Scriptfehler.
+Die Tests umfassen 52 Basis-Checks sowie 45 Regressionen für Monument,
+Kartenaufdeckung, Nebel, HP-Verlauf, Herzen, Combo-Anzeigen und neue Layouts.
 Er prüft zusätzlich Engine-/Scriptfehler, weil Godot bei manchen Laufzeitfehlern
 trotzdem Exitcode 0 liefert. Es gibt keine npm-/Python-Paketabhängigkeiten.
 Für den optionalen visuellen Test mit verfügbarem Bildschirm:

@@ -182,11 +182,11 @@ func run() -> void:
 	game.arena.spawn_boss("endboss")
 	var core = game.arena.enemies[-1]
 	game.arena.damage_enemy(core, 100)
-	expect(core.hp == 1000, "Endboss nodes shield the core")
+	expect(core.hp == 2000, "Endboss nodes shield the doubled-health core")
 	for node in game.arena.enemies.duplicate():
 		if node.kind == "endboss_node": game.arena.damage_enemy(node, 1000)
 	game.arena.damage_enemy(core, 100)
-	expect(core.hp == 900, "Destroying endboss nodes exposes core")
+	expect(core.hp == 1900, "Destroying endboss nodes exposes core")
 	game.arena.objects.clear()
 	game.arena.enemies.clear()
 	game.arena.enemy_bullets.clear()

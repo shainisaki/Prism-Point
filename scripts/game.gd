@@ -236,8 +236,6 @@ func open_shop() -> void:
 		return
 	state = "shop"
 	arena.release_pointer()
-	if mode != "hardcore":
-		hp = max_hp
 	waves_cleared = maxi(waves_cleared, wave)
 	store.data.best_waves = maxi(int(store.data.best_waves), waves_cleared)
 	store.save_progress()
@@ -328,6 +326,7 @@ func hurt(amount: int, source: Dictionary = {}) -> void:
 
 func register_kill(position: Vector2) -> void:
 	combo += 1
+	arena.floating_texts.append({"p": position + Vector2(0, -25), "text": "%d× COMBO" % combo, "life": 1.15})
 	combo_time = 2.2
 	points += maxi(0, mini(3, 1 + int(combo / 5.0)) - 1) + (1 if modifier == "rich" else 0)
 	if combo > int(store.data.max_combo):

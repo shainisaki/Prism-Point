@@ -37,6 +37,41 @@ func run() -> void:
 	await capture("shop")
 	game.ui.open_options("hub")
 	await capture("options")
+	game.start_run()
+	for object in game.arena.objects:
+		if object.kind == "old":
+			object.charge = 1.6
+			game.arena.player = object.p + Vector2(0, 120)
+			game.arena.camera.position = object.p + Vector2(0, -60)
+	game.elapsed = 2.3
+	game.arena.camera.force_update_scroll()
+	game.arena.reveal_view()
+	await capture("monument")
+	game.arena.enemies.clear()
+	game.arena.spawn_boss("cylinder")
+	var barrel = game.arena.enemies[0]
+	barrel.p = game.arena.player + Vector2(180, 0)
+	barrel.roll = 0.0
+	game.arena.enemies.assign([barrel])
+	await capture("barrel-0")
+	barrel.roll = 1.4
+	await capture("barrel-1")
+	game.modifier = "fog"
+	game.ui.update_hud()
+	game.elapsed = 18.0
+	await capture("fog")
+	game.pause_run()
+	await capture("pause-stats")
+	game.modifier = ""
+	game.start_run()
+	game.arena.objects.clear()
+	game.arena.enemies.clear()
+	game.arena.pickups.clear()
+	for i in 3:
+		var enemy = game.arena.spawn_enemy("runner", game.arena.player + Vector2(80 + i * 100, i * 55 - 50))
+		game.arena.damage_enemy(enemy, 100)
+	game.arena.pickups.append({"kind": "heart", "p": game.arena.player + Vector2(-100, 70), "value": 1})
+	await capture("combo-hearts")
 	game.queue_free()
 	await process_frame
 	DirAccess.remove_absolute("user://render_test.json")

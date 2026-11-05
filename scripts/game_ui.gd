@@ -8,7 +8,10 @@ var root: Control
 var overlay: Control
 var hud: Control
 var hud_stats: Label
-var hud_detail: Label
+var hud_bar: PanelContainer
+var minimap: Control
+var fog: ColorRect
+var fog_pause: Button
 var health: ProgressBar
 var toast_label: Label
 var toast_id := 0
@@ -44,6 +47,7 @@ func _ready() -> void:
 	hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(hud)
 	var top = PanelContainer.new()
+	hud_bar = top
 	top.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	top.offset_left = 20
 	top.offset_right = -20
@@ -69,15 +73,8 @@ func _ready() -> void:
 	health.add_theme_stylebox_override("fill", _style(Color("ff6b88"), Color.TRANSPARENT, 2, 0))
 	col.add_child(health)
 	_button(row, "Ⅱ  Pause", game.pause_run, "pause")
-	hud_detail = _label("", 14, MUTED)
-	hud_detail.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	hud_detail.offset_left = 24
-	hud_detail.offset_right = -24
-	hud_detail.offset_top = -70
-	hud_detail.offset_bottom = -16
-	hud_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hud.add_child(hud_detail)
 	var map = MiniMap.new()
+	minimap = map
 	map.arena = game.arena
 	map.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
 	map.offset_left = -212
@@ -86,6 +83,22 @@ func _ready() -> void:
 	map.offset_bottom = 247
 	map.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud.add_child(map)
+	fog = ColorRect.new()
+	fog.name = "AtmosphericFog"
+	fog.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	fog.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var fog_material = ShaderMaterial.new()
+	fog_material.shader = preload("res://shaders/fog.gdshader")
+	fog.material = fog_material
+	root.add_child(fog)
+	fog.hide()
+	fog_pause = _button(root, "Ⅱ  Pause", game.pause_run)
+	fog_pause.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	fog_pause.offset_left = -130
+	fog_pause.offset_right = -20
+	fog_pause.offset_top = 20
+	fog_pause.offset_bottom = 68
+	fog_pause.hide()
 	overlay = Control.new()
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_child(overlay)
@@ -144,6 +157,8 @@ func _clear() -> void:
 	buttons.clear()
 	toast_label.hide()
 	hud.hide()
+	fog.hide()
+	fog_pause.hide()
 	overlay.show()
 
 func _menu(title: String, subtitle: String = "") -> VBoxContainer:
@@ -275,15 +290,20 @@ func update_hud() -> void:
 		hud_stats.add_theme_font_size_override("font_size", 20)
 	health.max_value = game.max_hp
 	health.value = game.hp
-	var text = "COMBO ×%d   ·   %s" % [game.combo, "DURCHDRINGEN AKTIV" if game.pierce else "Durchdringen ab Combo 100"]
-	text += "   /   " + ("SHOP OFFEN · Folge dem Pfad" if game.goal_unlocked else "Überlebe die Welle")
-	if game.store.data.settings.get("passives", true):
-		text += "\nSCHADEN %.1f   ·   TEMPO %.0f   ·   REICHWEITE %.0f   ·   SCHUSS %.2fs" % [game.player_damage(), game.player_speed(), game.attack_range(), game.shot_interval()]
-	hud_detail.text = text
+	var fog_active = game.modifier == "fog" and game.state == "playing"
+	hud_bar.visible = not fog_active
+	minimap.visible = not fog_active
+	fog.visible = fog_active
+	fog_pause.visible = fog_active
 
 func pause_screen() -> void:
 	var box = _menu("Pause", "Welle %d · %s · %s" % [game.wave, game.character().name, game.catalog.modes[game.mode].name])
 	_text(box, "HP %d / %d   ·   Schaden %.1f   ·   Tempo %.0f   ·   Reichweite %.0f" % [game.hp, game.max_hp, game.player_damage(), game.player_speed(), game.attack_range()], 18, Color.WHITE)
+	_text(box, "Schussintervall %.2f s   ·   Schüsse/Sekunde %.2f   ·   Durchdringen: %s" % [game.shot_interval(), 1.0 / game.shot_interval(), "aktiv" if game.pierce else "nein"], 18, ACCENT)
+	var levels: Array[String] = []
+	for key in game.stats:
+		levels.append("%s: %s" % [game.catalog.passive_meta[key].name, str(game.stats[key])])
+	_text(box, "\n".join(levels), 17, MUTED)
 	_button(box, "Fortsetzen", game.resume_run, "resume")
 	_button(box, "Optionen", func(): open_options("paused"), "options")
 	_button(box, "Run neu starten", game.start_run, "restart")
@@ -337,7 +357,7 @@ func open_options(origin: String) -> void:
 	options_origin = origin
 	game.state = "options"
 	var box = _menu("Optionen", "Einstellungen werden im nativen Godot-Spielstand gespeichert.")
-	for item in [["music", "Musik"], ["sound", "Soundeffekte"], ["enemy_bars", "Gegner-Lebensbalken"], ["passives", "Statuswerte anzeigen"]]:
+	for item in [["music", "Musik"], ["sound", "Soundeffekte"], ["enemy_bars", "Gegner-Lebensbalken"]]:
 		var key = str(item[0])
 		var toggle = CheckButton.new()
 		toggle.text = item[1]
@@ -415,6 +435,10 @@ func toast(text: String) -> void:
 	toast_label.show()
 
 func _process(delta: float) -> void:
+	if fog.visible:
+		fog.material.set_shader_parameter("mist_time", game.elapsed)
+		fog.material.set_shader_parameter("view_size", root.size)
+		fog.material.set_shader_parameter("world_offset", game.arena.camera.position)
 	if game.state == "title" and is_instance_valid(title_background):
 		title_background.texture = portrait if root.size.y > root.size.x else landscape
 	if toast_time > 0:

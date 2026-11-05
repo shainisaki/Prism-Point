@@ -17,12 +17,17 @@ with tempfile.TemporaryDirectory(prefix="prism-tests-") as temporary:
     environment = os.environ.copy()
     for suffix in ("DATA", "CONFIG", "CACHE"):
         environment[f"XDG_{suffix}_HOME"] = str(Path(temporary) / suffix.lower())
-    for arguments in (["--editor", "--import", "--quit"], ["--script", "tests/smoke.gd"]):
-        result = subprocess.run(
-            [godot, "--headless", "--path", str(project), *arguments],
-            env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, timeout=120,
-        )
+    for arguments in (["--editor", "--import", "--quit"], ["--script", "tests/smoke.gd"], ["--script", "tests/feedback.gd"]):
+        try:
+            result = subprocess.run(
+                [godot, "--headless", "--path", str(project), *arguments],
+                env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, timeout=120,
+            )
+        except subprocess.TimeoutExpired as error:
+            output = error.stdout or b""
+            print(output.decode(errors="replace") if isinstance(output, bytes) else output)
+            sys.exit("Godot test timed out; see diagnostics above.")
         print(result.stdout, end="")
         if result.returncode or re.search(r"(?:SCRIPT ERROR:|(?:^|\n)ERROR:|FAIL:)", result.stdout):
             sys.exit(result.returncode or 1)
