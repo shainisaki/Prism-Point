@@ -4,6 +4,8 @@ extends Node2D
 const SIZE = Vector2(6000, 4500)
 const Layout = preload("res://scripts/arena_layout.gd")
 const TechArt = preload("res://scripts/tech_monuments.gd")
+const PointSymbol = preload("res://scripts/point_symbol.gd")
+const PointClusters = preload("res://scripts/point_clusters.gd")
 const DATA_FIELD_DISTANCE = 240.0
 const DATA_DOWNLOAD_TIME = 1.2
 const HEART_DROP_CHANCE = 0.08
@@ -20,6 +22,11 @@ const ENEMY_DATA = {
 const BOSS_KINDS = ["hexagon", "triangle", "square", "cylinder"]
 var game: Node
 var player = SIZE / 2.0
+var player_velocity := Vector2.ZERO
+var visual_stretch := 1.0
+var trail: Array[Dictionary] = []
+var trail_clock := 0.0
+var cluster_clock := 0.0
 var player_radius := 14.0
 var facing := Vector2.RIGHT
 var camera: Camera2D
@@ -114,7 +121,7 @@ func _notification(what: int) -> void:
 			game.pause_run()
 
 func generate_wave() -> void:
-	for collection in [walls, monument_walls, hazards, enemies, bullets, enemy_bullets, pickups, warnings, particles, floating_texts, objects, lasers, reachable, floor_dots]:
+	for collection in [walls, monument_walls, hazards, enemies, bullets, enemy_bullets, pickups, warnings, particles, floating_texts, objects, lasers, reachable, floor_dots, trail]:
 		collection.clear()
 	reset_discovery()
 	release_pointer()
@@ -124,6 +131,10 @@ func generate_wave() -> void:
 	laser_event_cd = 3.0
 	dash_cd = 0.0
 	dash_left = 0.0
+	player_velocity = Vector2.ZERO
+	visual_stretch = 1.0
+	trail_clock = 0.0
+	cluster_clock = 0.0
 	var layout = Layout.generate(layout_theme, SIZE)
 	layout_theme = layout.theme
 	walls.assign(layout.walls)
@@ -253,13 +264,20 @@ func place_old_monument() -> void:
 	var object = {"kind": "old", "p": center, "r": 54.0, "radius": MONUMENT_RADIUS, "charge": 0.0, "used": false}
 	objects.append(object)
 	var vertices = polygon(center, MONUMENT_RADIUS, 3, -PI / 2)
+	var outer = polygon(center, MONUMENT_RADIUS + MONUMENT_WALL_WIDTH, 3, -PI / 2)
+	var inner = polygon(center, MONUMENT_RADIUS - MONUMENT_WALL_WIDTH, 3, -PI / 2)
 	for i in 3:
 		var a = vertices[i]
 		var b = vertices[(i + 1) % 3]
 		var middle = (a + b) / 2
 		var direction = (b - a).normalized()
-		monument_walls.append({"a": a, "b": middle - direction * MONUMENT_GATE_WIDTH / 2, "width": MONUMENT_WALL_WIDTH})
-		monument_walls.append({"a": middle + direction * MONUMENT_GATE_WIDTH / 2, "b": b, "width": MONUMENT_WALL_WIDTH})
+		var normal = (middle - center).normalized() * MONUMENT_WALL_WIDTH / 2
+		var gate_a = middle - direction * MONUMENT_GATE_WIDTH / 2
+		var gate_b = middle + direction * MONUMENT_GATE_WIDTH / 2
+		monument_walls.append({"a": a, "b": gate_a, "width": MONUMENT_WALL_WIDTH,
+			"polygon": PackedVector2Array([outer[i], gate_a + normal, gate_a - normal, inner[i]])})
+		monument_walls.append({"a": gate_b, "b": b, "width": MONUMENT_WALL_WIDTH,
+			"polygon": PackedVector2Array([gate_b + normal, outer[(i + 1) % 3], inner[(i + 1) % 3], gate_b - normal])})
 
 func reset_discovery() -> void:
 	discovery = Image.create(int(SIZE.x / DISCOVERY_SCALE), int(SIZE.y / DISCOVERY_SCALE), false, Image.FORMAT_RGBA8)
@@ -323,7 +341,12 @@ func blocked(p: Vector2, radius: float) -> bool:
 		if circle_rect(p, radius, wall):
 			return true
 	for segment in monument_walls:
-		if Geometry2D.get_closest_point_to_segment(p, segment.a, segment.b).distance_to(p) < radius + segment.width / 2:
+		if segment.has("polygon"):
+			var shape = segment.polygon
+			if Geometry2D.is_point_in_polygon(p, shape): return true
+			for i in shape.size():
+				if Geometry2D.get_closest_point_to_segment(p, shape[i], shape[(i + 1) % shape.size()]).distance_to(p) < radius: return true
+		elif Geometry2D.get_closest_point_to_segment(p, segment.a, segment.b).distance_to(p) < radius + segment.width / 2:
 			return true
 	return false
 
@@ -356,6 +379,10 @@ func line_clear(a: Vector2, b: Vector2) -> bool:
 	for segment in monument_walls:
 		if Geometry2D.segment_intersects_segment(a, b, segment.a, segment.b) != null:
 			return false
+		if segment.has("polygon"):
+			var shape = segment.polygon
+			for i in shape.size():
+				if Geometry2D.segment_intersects_segment(a, b, shape[i], shape[(i + 1) % shape.size()]) != null: return false
 	for wall in walls:
 		if Geometry2D.segment_intersects_segment(a, b, wall.position, Vector2(wall.end.x, wall.position.y)) != null or Geometry2D.segment_intersects_segment(a, b, Vector2(wall.end.x, wall.position.y), wall.end) != null or Geometry2D.segment_intersects_segment(a, b, wall.end, Vector2(wall.position.x, wall.end.y)) != null or Geometry2D.segment_intersects_segment(a, b, Vector2(wall.position.x, wall.end.y), wall.position) != null:
 			return false
@@ -365,20 +392,9 @@ func simulate(delta: float) -> void:
 	var direction = Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	if pointer_vector.length() > 0.1:
 		direction = pointer_vector
-	if direction.length() > 0.1:
-		facing = direction.normalized()
-	dash_cd = maxf(0, dash_cd - delta)
-	if Input.is_action_just_pressed("dash") and game.stats.speed >= 10 and dash_cd <= 0:
-		dash_left = 0.2
-		dash_cd = 2.0
-		dash_direction = facing
-		burst(player, Color("aaccff"), 14)
-	var movement = direction * game.player_speed() * delta
-	if dash_left > 0:
-		movement = dash_direction * 1900.0 * clampf(game.player_speed() / 288.0, 0.75, 1.6) * delta
-		dash_left -= delta
-	player = move_circle(player, movement, player_radius, true)
-	camera.position = player
+	step_player(direction, delta)
+	var camera_target = player + player_velocity.limit_length(game.player_speed()) * 0.045
+	camera.position = camera.position.lerp(camera_target, 1.0 - exp(-14.0 * delta))
 	shake = move_toward(shake, 0.0, delta * 25)
 	camera.offset = Vector2(randf_range(-shake, shake), randf_range(-shake, shake))
 	camera.force_update_scroll()
@@ -436,6 +452,45 @@ func simulate(delta: float) -> void:
 		floating_texts[i].p.y -= 42.0 * delta
 		if floating_texts[i].life <= 0:
 			floating_texts.remove_at(i)
+
+func step_player(direction: Vector2, delta: float) -> void:
+	if direction.length() > 0.1:
+		facing = direction.normalized()
+	else:
+		direction = Vector2.ZERO
+	var desired = direction * game.player_speed()
+	var response = 24.0 if direction == Vector2.ZERO or player_velocity.dot(desired) < 0 else 16.0
+	var decay = exp(-response * delta)
+	# Integrating the exponential analytically keeps travel identical at 30/60/120 Hz.
+	var movement = desired * delta + (player_velocity - desired) * (1.0 - decay) / response
+	player_velocity = desired + (player_velocity - desired) * decay
+	dash_cd = maxf(0, dash_cd - delta)
+	if Input.is_action_just_pressed("dash") and game.stats.speed >= 10 and dash_cd <= 0:
+		dash_left = 0.2
+		dash_cd = 2.0
+		dash_direction = facing
+		burst(player, player_color(), 14)
+	if dash_left > 0:
+		movement = dash_direction * 1900.0 * clampf(game.player_speed() / 288.0, 0.75, 1.6) * minf(delta, dash_left)
+		dash_left = maxf(0, dash_left - delta)
+	var before = player
+	player = move_circle(player, movement, player_radius, true)
+	var travelled = player - before
+	if absf(travelled.x - movement.x) > 0.5: player_velocity.x = 0
+	if absf(travelled.y - movement.y) > 0.5: player_velocity.y = 0
+	var moving = clampf(travelled.length() / maxf(1, game.player_speed() * delta), 0, 1)
+	visual_stretch = lerpf(visual_stretch, 1.0 + moving * (0.22 if dash_left > 0 else 0.10), 1.0 - exp(-18.0 * delta))
+	for i in range(trail.size() - 1, -1, -1):
+		trail[i].life -= delta
+		if trail[i].life <= 0: trail.remove_at(i)
+	trail_clock += delta
+	if travelled.length() > 0.5 and trail_clock >= 0.025:
+		trail_clock = 0.0
+		trail.append({"p": before, "life": 0.24})
+		if trail.size() > 16: trail.pop_front()
+
+func player_color() -> Color:
+	return Color("b0b8cc") if game.selected_character == "sniper" else Color(game.character().color)
 
 func pick_enemy_type() -> String:
 	if game.modifier == "swarm":
@@ -782,6 +837,10 @@ func explode(p: Vector2, radius: float, damage: float, hurt_player: bool) -> voi
 		game.hurt(1)
 
 func update_pickups(delta: float) -> void:
+	cluster_clock += delta
+	if cluster_clock >= 0.1:
+		PointClusters.step(self, minf(cluster_clock, 0.15))
+		cluster_clock = 0.0
 	var magnet = 75.0 + game.stats.magnet * 22 + (12 if game.focus == "mobility" else 0)
 	for i in range(pickups.size() - 1, -1, -1):
 		var pickup = pickups[i]
@@ -797,7 +856,8 @@ func update_pickups(delta: float) -> void:
 				game.hp = mini(game.max_hp, game.hp + 1)
 				burst(player, Color("ff526a"), 8)
 			else:
-				game.points += maxi(1, int(pickup.value + floor(game.stats.resource * 0.6) + game.character().resource + (1 if game.focus == "economy" else 0))) * game.resource_mult
+				var bonus = floor(game.stats.resource * 0.6) + game.character().resource + (1 if game.focus == "economy" else 0)
+				game.points += PointClusters.reward(pickup, bonus, game.resource_mult)
 			pickups.remove_at(i)
 			if not game.test_mode:
 				game.audio.effect("collect")
@@ -911,12 +971,7 @@ func _draw() -> void:
 			continue
 		draw_metal_wall(wall)
 	for segment in monument_walls:
-		draw_line(segment.a + Vector2(6, 8), segment.b + Vector2(6, 8), Color(0, 0, 0, 0.5), segment.width + 8, true)
-		draw_line(segment.a, segment.b, Color("263b48"), segment.width, true)
-		draw_line(segment.a, segment.b, Color("506a79"), segment.width - 6, true)
-		draw_line(segment.a, segment.b, Color("152936"), segment.width - 12, true)
-		for end in [segment.a, segment.b]:
-			draw_circle(end, 4, Color("92a7b2"))
+		draw_module_wall(segment)
 	var goal_color = Color("5dffc0") if game.goal_unlocked else Color("526476")
 	draw_arc(goal, 36 + sin(game.elapsed * 3) * 3, 0, TAU, 48, Color(goal_color, 0.5), 2, true)
 	draw_colored_polygon(polygon(goal, 22, 6, game.elapsed * 0.4), goal_color)
@@ -934,8 +989,16 @@ func _draw() -> void:
 		if visible.has_point(pickup.p):
 			if pickup.kind == "heart":
 				draw_heart(pickup.p + Vector2(0, sin(game.elapsed * 4) * 2))
+			elif pickup.kind == "point":
+				var radius = PointSymbol.radius(int(pickup.value))
+				PointSymbol.draw_symbol(self, pickup.p, radius)
+				if pickup.value > 1:
+					var text = str(int(pickup.value))
+					var at = pickup.p - Vector2(ThemeDB.fallback_font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x / 2, radius + 6)
+					draw_string_outline(ThemeDB.fallback_font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, 3, Color("102128"))
+					draw_string(ThemeDB.fallback_font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, PointSymbol.COLOR)
 			else:
-				glow(pickup.p, 5 if pickup.kind == "point" else 10, Color("6ebeff") if pickup.kind == "point" else Color("e8b0ff"))
+				glow(pickup.p, 10, Color("e8b0ff"))
 	for enemy in enemies:
 		if not visible.has_point(enemy.p) or enemy.hp <= 0:
 			continue
@@ -953,19 +1016,35 @@ func _draw() -> void:
 			draw_arc(particle.p, particle.ring * (1 - particle.life / 0.3), 0, TAU, 40, Color(particle.color, particle.life * 2), 3, true)
 		else:
 			draw_circle(particle.p, 2.0, Color(particle.color, minf(1.0, particle.life * 3)))
-	var player_color = Color(game.character().color)
-	if game.selected_character == "sniper":
-		player_color = Color("b0b8cc")
+	var tint = player_color()
+	for echo in trail:
+		var fraction = clampf(echo.life / 0.24, 0, 1)
+		draw_circle(echo.p, player_radius * (0.55 + fraction * 0.4), Color(tint, fraction * fraction * 0.24))
 	if game.invincible <= 0 or fmod(game.invincible, 0.14) < 0.07:
 		draw_circle(player + Vector2(3, 6), player_radius + 2, Color(0, 0, 0, 0.4))
-		draw_arc(player, player_radius + 5, 0, TAU, 40, Color(player_color, 0.15), 5, true)
-		draw_circle(player, player_radius, player_color)
+		draw_set_transform(player, facing.angle(), Vector2(visual_stretch, 1.0 / visual_stretch))
+		draw_arc(Vector2.ZERO, player_radius + 5, 0, TAU, 40, Color(tint, 0.15), 5, true)
+		draw_circle(Vector2.ZERO, player_radius, tint)
+		draw_set_transform(Vector2.ZERO)
 	for popup in floating_texts:
 		var alpha = clampf(popup.life / 0.4, 0, 1)
 		var font = ThemeDB.fallback_font
 		var origin = popup.p - Vector2(font.get_string_size(popup.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 23).x / 2, 0)
 		draw_string_outline(font, origin, popup.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 23, 6, Color(0.06, 0.04, 0, alpha))
 		draw_string(font, origin, popup.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 23, Color(1, 0.85, 0.15, alpha))
+
+func draw_module_wall(segment: Dictionary) -> void:
+	var shape = segment.polygon
+	var shadow = PackedVector2Array()
+	for point in shape: shadow.append(point + Vector2(5, 8))
+	draw_colored_polygon(shadow, Color(0, 0, 0, 0.45))
+	draw_colored_polygon(shape, Color("344e5d"))
+	var face = shape.duplicate()
+	var center = (shape[0] + shape[1] + shape[2] + shape[3]) / 4
+	for i in face.size(): face[i] = face[i].lerp(center, 0.13)
+	draw_colored_polygon(face, Color("1b303d"))
+	draw_line(shape[0], shape[1], Color("809aa8"), 2, true)
+	draw_line(shape[2], shape[3], Color("0f202a"), 2, true)
 
 func draw_metal_wall(wall: Rect2) -> void:
 	draw_rect(Rect2(wall.position + Vector2(10, 13), wall.size + Vector2(2, 2)), Color(0, 0, 0, 0.16))

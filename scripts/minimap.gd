@@ -13,7 +13,9 @@ func _draw() -> void:
 	for wall in arena.walls:
 		draw_rect(Rect2(wall.position * scale_xy, wall.size * scale_xy), Color("607184"))
 	for segment in arena.monument_walls:
-		draw_line(segment.a * scale_xy, segment.b * scale_xy, Color("91a99b"), maxf(1, segment.width * scale_xy.x), true)
+		var points = PackedVector2Array()
+		for point in segment.polygon: points.append(point * scale_xy)
+		draw_colored_polygon(points, Color("91a99b"))
 	if arena.route.size() > 1:
 		var points = PackedVector2Array()
 		for point in arena.route:

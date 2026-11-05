@@ -113,6 +113,29 @@ func run() -> void:
 	await capture("data-transfer")
 	game.arena.update_objects(0.7)
 	await capture("data-decoded")
+	game.arena.objects.clear()
+	game.arena.pickups.clear()
+	game.arena.enemies.clear()
+	game.arena.monument_walls.clear()
+	game.arena.player = center
+	game.arena.player_velocity = Vector2.ZERO
+	for i in 24: game.arena.step_player(Vector2.RIGHT, 1.0 / 60)
+	game.arena.camera.position = game.arena.player
+	game.arena.camera.force_update_scroll()
+	for i in 60:
+		game.arena.pickups.append({"kind": "point", "p": game.arena.player + Vector2(150 + i % 4, -60 + i % 3), "value": 1})
+	game.arena.PointClusters.step(game.arena, 0.1)
+	for offset in [Vector2(220, 70), Vector2(270, -110), Vector2(90, 130)]:
+		game.arena.pickups.append({"kind": "point", "p": game.arena.player + offset, "value": 1})
+	game.ui.toast_label.hide()
+	await capture("point-clusters-motion")
+	game.pause_run()
+	await capture("pause-console")
+	game.ui.buttons.pause_audio.pressed.emit()
+	await capture("pause-audio")
+	game.ui.return_from_options()
+	game.ui.buttons.pause_controls.pressed.emit()
+	await capture("pause-controls")
 	game.queue_free()
 	await process_frame
 	DirAccess.remove_absolute("user://render_test.json")

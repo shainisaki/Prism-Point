@@ -109,7 +109,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.keycode != KEY_ESCAPE:
 			bind_key(ui.rebind_action, event.physical_keycode)
 		ui.rebind_action = ""
-		ui.open_options(ui.options_origin)
+		ui.open_options(ui.options_origin, ui.options_section)
 		get_viewport().set_input_as_handled()
 		return
 	if state == "title" and ((event is InputEventKey and event.pressed and event.keycode in [KEY_ENTER, KEY_SPACE]) or (event is InputEventJoypadButton and event.pressed)):
@@ -122,6 +122,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			resume_run()
 		elif state == "options":
 			ui.return_from_options()
+		elif state == "compendium":
+			ui.return_from_compendium()
 		get_viewport().set_input_as_handled()
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_F11:
 		var full = DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN

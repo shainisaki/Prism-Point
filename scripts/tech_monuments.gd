@@ -28,7 +28,6 @@ static func draw_pressure_module(canvas: Node2D, object: Dictionary) -> void:
 		canvas.draw_line(p + Vector2(-24, y), p + Vector2(24, y), Color("4c646e"), 2, true)
 	for i in 3:
 		canvas.draw_circle(p + Vector2((i - 1) * 16, 33), 3, BLUE if canvas.lamp_progress(object, i) >= 0.999 else IDLE)
-	label(canvas, p + Vector2(0, 83), "AKTIV" if object.used else "DRUCKPLATTE", 15, BLUE if object.used else Color("9db6c2"))
 
 static func draw_bulb(canvas: Node2D, p: Vector2, lit: bool) -> void:
 	if lit:

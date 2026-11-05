@@ -2,6 +2,7 @@ extends CanvasLayer
 
 const MiniMap = preload("res://scripts/minimap.gd")
 const HudClock = preload("res://scripts/hud_clock.gd")
+const PointSymbol = preload("res://scripts/point_symbol.gd")
 const ACCENT = Color("60dce4")
 const AMBER = Color("edb854")
 const MUTED = Color("8ea5b2")
@@ -30,6 +31,8 @@ var toast_label: Label
 var toast_id := 0
 var toast_time := 0.0
 var options_origin := "hub"
+var options_section := "all"
+var compendium_origin := "hub"
 var rebind_action := ""
 var buttons: Dictionary = {}
 var title_background: TextureRect
@@ -168,7 +171,14 @@ func _currency_chip(parent: Node, icon: String, color: Color) -> Label:
 	row.add_theme_constant_override("separation", 10)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(row)
-	row.add_child(_label(icon, 22, color))
+	if icon == "◇":
+		var symbol = PointSymbol.new()
+		symbol.custom_minimum_size = Vector2(22, 22)
+		symbol.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		symbol.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(symbol)
+	else:
+		row.add_child(_label(icon, 22, color))
 	var label = _label("0", 22)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -391,17 +401,67 @@ func update_hud() -> void:
 
 func pause_screen() -> void:
 	var box = _menu("Pause", "Welle %d · %s · %s" % [game.wave, game.character().name, game.catalog.modes[game.mode].name])
-	_text(box, "HP %d / %d   ·   Schaden %.1f   ·   Tempo %.0f   ·   Reichweite %.0f" % [game.hp, game.max_hp, game.player_damage(), game.player_speed(), game.attack_range()], 18, Color.WHITE)
-	_text(box, "Schussintervall %.2f s   ·   Schüsse/Sekunde %.2f   ·   Durchdringen: %s" % [game.shot_interval(), 1.0 / game.shot_interval(), "aktiv" if game.pierce else "nein"], 18, ACCENT)
-	var levels: Array[String] = []
+	var panels = GridContainer.new()
+	panels.columns = 2 if root.size.x >= 900 else 1
+	panels.add_theme_constant_override("h_separation", 18)
+	panels.add_theme_constant_override("v_separation", 18)
+	box.add_child(panels)
+	var run = _pause_panel(panels, "RUN-STEUERUNG")
+	var resume = _button(run, "FORTSETZEN   →", game.resume_run, "resume")
+	resume.custom_minimum_size.y = 74
+	resume.add_theme_stylebox_override("normal", _style(Color("153c48"), ACCENT, 10, 14))
+	_button(run, "Run neu starten", game.start_run, "restart")
+	_button(run, "Zur Charakterauswahl", game.show_hub, "quit_run")
+	var modules = _pause_panel(panels, "EINSTELLUNGEN & INFORMATIONEN")
+	var cards = GridContainer.new()
+	cards.columns = 2
+	cards.add_theme_constant_override("h_separation", 10)
+	cards.add_theme_constant_override("v_separation", 10)
+	modules.add_child(cards)
+	_pause_card(cards, "AUDIO", "Musik · Lautstärke · Effekte", func(): open_options("paused", "audio"), "pause_audio", AMBER)
+	_pause_card(cards, "ANZEIGE", "Lebensbalken · Vollbild", func(): open_options("paused", "display"), "pause_display", ACCENT)
+	_pause_card(cards, "STEUERUNG", "Tasten · Eingabe", func(): open_options("paused", "controls"), "pause_controls", Color("a3b9e5"))
+	_pause_card(cards, "KOMPENDIUM", "Gegner · Objekte", func(): compendium_screen("paused"), "pause_compendium", Color("84cdbb"))
+	_button(modules, "Alle Einstellungen", func(): open_options("paused"), "options")
+	_text(box, "STATUS & BUILD", 14, ACCENT)
+	var overview = GridContainer.new()
+	overview.columns = 4 if root.size.x >= 900 else 2
+	overview.add_theme_constant_override("h_separation", 10)
+	overview.add_theme_constant_override("v_separation", 10)
+	box.add_child(overview)
+	for entry in [["LEBEN", "%d / %d" % [game.hp, game.max_hp]], ["SCHADEN", "%.1f" % game.player_damage()], ["TEMPO", "%.0f" % game.player_speed()], ["REICHWEITE", "%.0f" % game.attack_range()]]:
+		var panel = _pause_panel(overview, entry[0])
+		_text(panel, entry[1], 24, Color.WHITE)
+	_text(box, "Schussintervall %.2f s   ·   Schüsse/Sekunde %.2f   ·   Durchdringen: %s" % [game.shot_interval(), 1.0 / game.shot_interval(), "aktiv" if game.pierce else "nein"], 16, ACCENT)
+	var levels = GridContainer.new()
+	levels.columns = 4 if root.size.x >= 900 else 2
+	levels.add_theme_constant_override("h_separation", 12)
+	box.add_child(levels)
 	for key in game.stats:
-		levels.append("%s: %s" % [game.catalog.passive_meta[key].name, str(game.stats[key])])
-	_text(box, "\n".join(levels), 17, MUTED)
-	_button(box, "Fortsetzen", game.resume_run, "resume")
-	_button(box, "Optionen", func(): open_options("paused"), "options")
-	_button(box, "Run neu starten", game.start_run, "restart")
-	_button(box, "Zur Charakterauswahl", game.show_hub, "quit_run")
+		var level = _text(levels, "%s: %s" % [game.catalog.passive_meta[key].name, str(game.stats[key])], 15)
+		level.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_focus_first()
+
+func _pause_panel(parent: Node, title: String) -> VBoxContainer:
+	var panel = PanelContainer.new()
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_theme_stylebox_override("panel", _style(Color("101e28"), Color("2d4858"), 12, 16))
+	parent.add_child(panel)
+	var column = VBoxContainer.new()
+	column.add_theme_constant_override("separation", 10)
+	panel.add_child(column)
+	_text(column, title, 13, MUTED)
+	return column
+
+func _pause_card(parent: Node, title: String, detail: String, action: Callable, id: String, color: Color) -> void:
+	var button = _button(parent, title + "\n" + detail, action, id)
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.custom_minimum_size.y = 74
+	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	button.add_theme_font_size_override("font_size", 16)
+	button.add_theme_color_override("font_color", color)
+	button.add_theme_stylebox_override("normal", _style(Color("142631"), color.darkened(0.55), 8, 12))
+	button.add_theme_stylebox_override("hover", _style(Color("1c3543"), color, 8, 12))
 
 func shop_screen() -> void:
 	var focus = "Erster Kauf bestimmt deinen Build" if game.focus == "" else "BUILD: %s · passende Upgrades −20%%" % game.BUILD_NAMES[game.focus]
@@ -432,7 +492,8 @@ func gameover_screen(reason: String) -> void:
 	_button(box, "Noch einmal", game.start_run, "restart")
 	_focus_first()
 
-func compendium_screen() -> void:
+func compendium_screen(origin: String = "hub") -> void:
+	compendium_origin = origin
 	game.state = "compendium"
 	var box = _menu("Kompendium", "Gegner, Bosse und Funde")
 	for entry in game.catalog.compendium:
@@ -443,53 +504,86 @@ func compendium_screen() -> void:
 		panel.add_child(content)
 		_text(content, entry.name, 20, Color(entry.color) if entry.color != "#111" else Color("b7b7cb"))
 		_text(content, entry.desc, 16)
-	_button(box, "Zurück", game.show_hub, "back_hub")
+	_button(box, "Zurück", return_from_compendium, "back_compendium")
 	_focus_first()
 
-func open_options(origin: String) -> void:
+func return_from_compendium() -> void:
+	if compendium_origin == "paused":
+		game.state = "paused"
+		pause_screen()
+	else:
+		game.show_hub()
+
+func open_options(origin: String, section: String = "all") -> void:
 	options_origin = origin
+	options_section = section
 	game.state = "options"
-	var box = _menu("Optionen", "Einstellungen werden im nativen Godot-Spielstand gespeichert.")
-	for item in [["music", "Musik"], ["sound", "Soundeffekte"], ["enemy_bars", "Gegner-Lebensbalken"]]:
-		var key = str(item[0])
-		var toggle = CheckButton.new()
-		toggle.text = item[1]
-		toggle.button_pressed = game.store.data.settings.get(key, true)
-		toggle.toggled.connect(func(value): game.store.data.settings[key] = value; _save_options())
-		box.add_child(toggle)
-	for item in [["volume", "Musik-Lautstärke"], ["sfx_volume", "Effekt-Lautstärke"]]:
-		var key = str(item[0])
-		_text(box, item[1], 16)
-		var slider = HSlider.new()
-		slider.min_value = 0.0
-		slider.max_value = 1.0
-		slider.step = 0.01
-		slider.value = game.store.data.settings.get(key, 0.7)
-		slider.value_changed.connect(func(value): game.store.data.settings[key] = value; _save_options())
-		box.add_child(slider)
-	var song = OptionButton.new()
-	var song_ids = game.audio.TRACKS.keys()
-	for id in song_ids:
-		song.add_item(game.audio.TRACKS[id])
-	song.select(maxi(0, song_ids.find(game.store.data.settings.get("song", "sternenlauf"))))
-	song.item_selected.connect(func(index): game.store.data.settings.song = song_ids[index]; _save_options())
-	box.add_child(song)
-	_text(box, "Steuerung: WASD oder Pfeile / linker Gamepad-Stick / Ziehen mit Maus oder Touch.\nPause: P / Esc / Start. Dash: Shift / X ab Tempo-Level 10. Menüs: Pfeile + Enter / Gamepad A.", 15)
-	var keys = GridContainer.new()
-	keys.columns = 3 if root.size.x >= 900 else 2
-	box.add_child(keys)
-	var names = {"move_up": "Hoch", "move_down": "Runter", "move_left": "Links", "move_right": "Rechts", "pause_run": "Pause", "dash": "Dash"}
-	for action in game.DEFAULT_KEYS:
-		var action_id = str(action)
-		var key = int(game.store.data.settings.get("keys", {}).get(action, game.DEFAULT_KEYS[action]))
-		var button = _button(keys, "%s: %s" % [names[action], OS.get_keycode_string(key)], func():
-			if root.get_viewport().gui_get_focus_owner() != null:
-				root.get_viewport().gui_get_focus_owner().release_focus()
-			rebind_action = action_id
-			toast("Neue Taste drücken · Esc bricht ab"), "bind_" + action)
-		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var titles = {"all": "Optionen", "audio": "Audio", "display": "Anzeige", "controls": "Steuerung"}
+	var box = _menu(titles.get(section, "Optionen"), "Passe dein Spielerlebnis an.")
+	var tabs = HBoxContainer.new()
+	tabs.add_theme_constant_override("separation", 10)
+	box.add_child(tabs)
+	for item in [["all", "Alle"], ["audio", "Audio"], ["display", "Anzeige"], ["controls", "Steuerung"]]:
+		var category = str(item[0])
+		var tab = _button(tabs, item[1], func(): open_options(origin, category), "tab_" + category)
+		tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tab.disabled = category == section
+	if section in ["all", "audio"]:
+		_text(box, "AUDIO", 14, AMBER)
+		for item in [["music", "Musik"], ["sound", "Soundeffekte"]]:
+			_setting_toggle(box, item[0], item[1])
+		for item in [["volume", "Musik-Lautstärke"], ["sfx_volume", "Effekt-Lautstärke"]]:
+			var key = str(item[0])
+			_text(box, item[1], 16)
+			var slider = HSlider.new()
+			slider.min_value = 0.0
+			slider.max_value = 1.0
+			slider.step = 0.01
+			slider.value = game.store.data.settings.get(key, 0.7)
+			slider.value_changed.connect(func(value): game.store.data.settings[key] = value; _save_options())
+			box.add_child(slider)
+		var song = OptionButton.new()
+		var song_ids = game.audio.TRACKS.keys()
+		for id in song_ids: song.add_item(game.audio.TRACKS[id])
+		song.select(maxi(0, song_ids.find(game.store.data.settings.get("song", "sternenlauf"))))
+		song.item_selected.connect(func(index): game.store.data.settings.song = song_ids[index]; _save_options())
+		box.add_child(song)
+	if section in ["all", "display"]:
+		_text(box, "ANZEIGE", 14, ACCENT)
+		_setting_toggle(box, "enemy_bars", "Gegner-Lebensbalken")
+		var fullscreen = CheckButton.new()
+		fullscreen.text = "Vollbild"
+		fullscreen.button_pressed = DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
+		fullscreen.toggled.connect(func(value): DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if value else DisplayServer.WINDOW_MODE_WINDOWED))
+		box.add_child(fullscreen)
+	if section in ["all", "controls"]:
+		_text(box, "STEUERUNG", 14, Color("a3b9e5"))
+		_text(box, "WASD / Pfeile / linker Stick / Ziehen mit Maus oder Touch.\nPause: P / Esc / Start. Dash: Shift / X ab Tempo-Level 10.", 15)
+		var keys = GridContainer.new()
+		keys.columns = 3 if root.size.x >= 900 else 2
+		box.add_child(keys)
+		var names = {"move_up": "Hoch", "move_down": "Runter", "move_left": "Links", "move_right": "Rechts", "pause_run": "Pause", "dash": "Dash"}
+		for action in game.DEFAULT_KEYS:
+			var action_id = str(action)
+			var key = int(game.store.data.settings.get("keys", {}).get(action, game.DEFAULT_KEYS[action]))
+			var button = _button(keys, "%s: %s" % [names[action], OS.get_keycode_string(key)], func():
+				if root.get_viewport().gui_get_focus_owner() != null: root.get_viewport().gui_get_focus_owner().release_focus()
+				rebind_action = action_id
+				toast("Neue Taste drücken · Esc bricht ab"), "bind_" + action)
+			button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_button(box, "Standardbelegung wiederherstellen", func():
+			for action in game.DEFAULT_KEYS: game.bind_key(action, game.DEFAULT_KEYS[action], false)
+			game.store.save_progress()
+			open_options(origin, section), "reset_binds")
 	_button(box, "Zurück", return_from_options, "back_options")
 	_focus_first()
+
+func _setting_toggle(parent: Node, key: String, title: String) -> void:
+	var toggle = CheckButton.new()
+	toggle.text = title
+	toggle.button_pressed = game.store.data.settings.get(key, true)
+	toggle.toggled.connect(func(value): game.store.data.settings[key] = value; _save_options())
+	parent.add_child(toggle)
 
 func _save_options() -> void:
 	game.store.save_progress()

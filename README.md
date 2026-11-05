@@ -1,7 +1,8 @@
 # PRISM POINT — Godot
 
 Native 2D-Version für **Godot 4.6+**, entwickelt und geprüft mit Godot 4.6.3.
-Aktueller Stand: [Elektronik-Update mit Druckplatte, Datenchip und Schaltkreis-Boden](docs/TECH_UPDATE.md).
+Aktueller Stand: [Punkte, dynamische Bewegung und neues Pausenmenü mit Bildern](docs/FEEL_UPDATE.md).
+Das [Elektronik-Update](docs/TECH_UPDATE.md) beschreibt Druckplatte, Datenchip und Schaltkreis-Boden.
 Das Spiel verwendet GDScript, Godot-Controls, Camera2D, AudioStreamPlayer und
 AStarGrid2D. Es benötigt **keinen Browser, kein HTML und keinen Webserver**.
 
@@ -47,6 +48,13 @@ und blendet HP, Timer, Punkte/Gold und Minikarte aus. Pause bleibt erreichbar.
 Statuswerte stehen ausschließlich im Pausenmenü. Kill-Popups zeigen kurzzeitig
 nur die gelbe Zahl am besiegten Gegner, ohne „Combo“ oder „×“. Der Spieler hat
 keinen blauen Waffen-/Richtungsstrich mehr.
+
+Fallengelassene Punkte verwenden dieselbe türkise Raute wie die Punkteanzeige.
+Nahe Punkte ziehen sich an und verschmelzen zu einer größeren Raute mit
+addiertem Wert. Sammelboni bleiben dabei erhalten. Sanftes Beschleunigen,
+schnelles Abbremsen, eine kurze Spur in der Charakterfarbe und eine dezent
+nachführende Kamera machen die Bewegung dynamischer. Im Pausenmenü öffnen
+eigene Schaltflächen Audio, Anzeige, Steuerung und Kompendium.
 
 ## Übertragene Inhalte
 
@@ -99,6 +107,9 @@ python3 tests/run.py
 Der Runner importiert Assets und führt echte GDScript-Integrationstests aus.
 Die Tests umfassen 52 Basis-Checks sowie 69 Regressionen für Druckplatte, Datenchip, HUD-Layout, Monument,
 Kartenaufdeckung, Nebel, HP-Verlauf, Herzen, Combo-Anzeigen und neue Layouts.
+Weitere 31 Checks prüfen Punkteverschmelzung, Werterhalt, 5.000 dichte Drops,
+Bewegung bei mehreren Bildraten, bündige Wandecken und die Pausen-Schaltflächen:
+insgesamt **152 bestandene Checks**.
 Er prüft zusätzlich Engine-/Scriptfehler, weil Godot bei manchen Laufzeitfehlern
 trotzdem Exitcode 0 liefert. Es gibt keine npm-/Python-Paketabhängigkeiten.
 Für den optionalen visuellen Test mit verfügbarem Bildschirm:
