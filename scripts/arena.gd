@@ -54,8 +54,18 @@ var pointer_vector := Vector2.ZERO
 var next_id := 1
 var laser_event_cd := 3.0
 var crystal_texture: Texture2D
+var floor_surface: ColorRect
 
 func _ready() -> void:
+	floor_surface = ColorRect.new()
+	floor_surface.name = "StoneFloor"
+	floor_surface.size = SIZE
+	floor_surface.z_index = -10
+	floor_surface.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var surface_material = ShaderMaterial.new()
+	surface_material.shader = preload("res://shaders/stone_floor.gdshader")
+	floor_surface.material = surface_material
+	add_child(floor_surface)
 	camera = Camera2D.new()
 	add_child(camera)
 	camera.position = player
@@ -797,17 +807,9 @@ func glow(p: Vector2, radius: float, color: Color) -> void:
 func _draw() -> void:
 	if walls.is_empty():
 		return
-	draw_rect(Rect2(Vector2.ZERO, SIZE), Color("11151a"))
 	var visible = Rect2(camera.get_screen_center_position() - get_viewport_rect().size / 2 - Vector2(150, 150), get_viewport_rect().size + Vector2(300, 300))
-	for p in floor_dots:
-		if visible.has_point(p):
-			draw_circle(p, 1.3, Color("49443b"))
-	for x in range(0, 4800, 100):
-		draw_line(Vector2(x, 0), Vector2(x, 3600), Color(0.4, 0.6, 0.7, 0.025))
-	for y in range(0, 3600, 100):
-		draw_line(Vector2(0, y), Vector2(4800, y), Color(0.4, 0.6, 0.7, 0.025))
 	if route.size() > 1:
-		var color = Color("4b9e8b") if game.goal_unlocked else Color("394653")
+		var color = Color("51c9d7") if game.goal_unlocked else Color("415864")
 		draw_polyline(route, Color(color, 0.12), 16, true)
 		for i in range(1, route.size()):
 			draw_dashed_line(route[i - 1], route[i], Color(color, 0.65), 2, 7, true)
@@ -817,10 +819,7 @@ func _draw() -> void:
 	for wall in walls:
 		if not visible.intersects(wall):
 			continue
-		draw_rect(Rect2(wall.position + Vector2(6, 8), wall.size), Color(0, 0, 0, 0.4))
-		draw_rect(wall, Color("303a44"))
-		draw_rect(wall, Color("586573"), false, 2)
-		draw_line(wall.position + Vector2(2, 2), Vector2(wall.end.x - 2, wall.position.y + 2), Color("6b7782"), 2)
+		draw_metal_wall(wall)
 	for segment in monument_walls:
 		draw_line(segment.a + Vector2(6, 8), segment.b + Vector2(6, 8), Color(0, 0, 0, 0.5), segment.width + 8, true)
 		draw_line(segment.a, segment.b, Color("56636a"), segment.width, true)
@@ -868,13 +867,29 @@ func _draw() -> void:
 		draw_circle(player + Vector2(3, 6), player_radius + 2, Color(0, 0, 0, 0.4))
 		draw_arc(player, player_radius + 5, 0, TAU, 40, Color(player_color, 0.15), 5, true)
 		draw_circle(player, player_radius, player_color)
-		draw_line(player, player + facing * (player_radius + 8), Color("75d4ff"), 5, true)
 	for popup in floating_texts:
 		var alpha = clampf(popup.life / 0.4, 0, 1)
 		var font = ThemeDB.fallback_font
 		var origin = popup.p - Vector2(font.get_string_size(popup.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 23).x / 2, 0)
 		draw_string_outline(font, origin, popup.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 23, 6, Color(0.06, 0.04, 0, alpha))
 		draw_string(font, origin, popup.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 23, Color(1, 0.85, 0.15, alpha))
+
+func draw_metal_wall(wall: Rect2) -> void:
+	draw_rect(Rect2(wall.position + Vector2(10, 13), wall.size + Vector2(2, 2)), Color(0, 0, 0, 0.16))
+	draw_rect(Rect2(wall.position + Vector2(4, 6), wall.size), Color(0, 0, 0, 0.38))
+	draw_rect(wall, Color("1b2a34"))
+	draw_rect(wall.grow(-3), Color("304450"))
+	draw_rect(wall, Color("647e8c"), false, 1)
+	draw_line(wall.position + Vector2(2, 2), Vector2(wall.end.x - 2, wall.position.y + 2), Color("8ba0aa"), 1.5, true)
+	draw_line(Vector2(wall.position.x + 2, wall.end.y - 2), wall.end - Vector2(2, 2), Color("17252e"), 3)
+	if wall.size.x > wall.size.y:
+		for x in range(int(wall.position.x + 96), int(wall.end.x - 8), 160):
+			draw_line(Vector2(x, wall.position.y + 5), Vector2(x, wall.end.y - 5), Color("1e313c"), 2)
+			draw_circle(Vector2(x - 5, wall.position.y + 7), 1.5, Color("81939a"))
+	else:
+		for y in range(int(wall.position.y + 96), int(wall.end.y - 8), 160):
+			draw_line(Vector2(wall.position.x + 5, y), Vector2(wall.end.x - 5, y), Color("1e313c"), 2)
+			draw_circle(Vector2(wall.position.x + 7, y - 5), 1.5, Color("81939a"))
 
 func draw_enemy(enemy: Dictionary) -> void:
 	var color = Color.WHITE if enemy.flash > 0 else enemy.color

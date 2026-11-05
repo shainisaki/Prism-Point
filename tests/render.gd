@@ -72,6 +72,17 @@ func run() -> void:
 		game.arena.damage_enemy(enemy, 100)
 	game.arena.pickups.append({"kind": "heart", "p": game.arena.player + Vector2(-100, 70), "value": 1})
 	await capture("combo-hearts")
+	game.wave = 6
+	game.wave_time = 28
+	game.hp = 9
+	game.points = 142
+	game.store.data.gold = 8
+	game.ui.update_hud()
+	game.ui.toast_label.hide()
+	await capture("combined-ui")
+	root.content_scale_size = Vector2i.ZERO
+	root.size = Vector2i(800, 600)
+	await capture("combined-ui-compact")
 	game.queue_free()
 	await process_frame
 	DirAccess.remove_absolute("user://render_test.json")

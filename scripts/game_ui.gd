@@ -1,15 +1,28 @@
 extends CanvasLayer
 
 const MiniMap = preload("res://scripts/minimap.gd")
-const ACCENT = Color("75d4ff")
-const MUTED = Color("8a9bb0")
+const HudClock = preload("res://scripts/hud_clock.gd")
+const ACCENT = Color("60dce4")
+const AMBER = Color("edb854")
+const MUTED = Color("8ea5b2")
 var game: Node
 var root: Control
 var overlay: Control
 var hud: Control
 var hud_stats: Label
-var hud_bar: PanelContainer
+var hud_bar: Control
 var minimap: Control
+var minimap_frame: PanelContainer
+var health_plate: PanelContainer
+var wave_plate: PanelContainer
+var currency_row: HBoxContainer
+var hp_text: Label
+var timer_text: Label
+var point_text: Label
+var gold_text: Label
+var clock: Control
+var pause_button: Button
+var last_hud_size := Vector2.ZERO
 var fog: ColorRect
 var fog_pause: Button
 var health: ProgressBar
@@ -46,43 +59,70 @@ func _ready() -> void:
 	hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(hud)
-	var top = PanelContainer.new()
+	var top = Control.new()
 	hud_bar = top
 	top.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	top.offset_left = 20
-	top.offset_right = -20
-	top.offset_top = 16
+	top.offset_bottom = 84
 	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	top.add_theme_stylebox_override("panel", _style(Color(0.025, 0.045, 0.07, 0.95), Color("26384c"), 12, 14))
 	hud.add_child(top)
+	health_plate = _hud_panel(top)
+	health_plate.name = "HealthCapsule"
 	var row = HBoxContainer.new()
-	row.add_theme_constant_override("separation", 24)
+	row.add_theme_constant_override("separation", 12)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	top.add_child(row)
-	var col = VBoxContainer.new()
-	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(col)
-	hud_stats = _label("", 20)
-	col.add_child(hud_stats)
+	health_plate.add_child(row)
+	row.add_child(_label("♥", 25, Color("e3eef2")))
+	hp_text = _label("9 / 10", 22)
+	row.add_child(hp_text)
 	health = ProgressBar.new()
-	health.custom_minimum_size.y = 4
+	health.custom_minimum_size = Vector2(130, 8)
+	health.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	health.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	health.show_percentage = false
 	health.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	health.add_theme_stylebox_override("background", _style(Color("2d2431"), Color.TRANSPARENT, 2, 0))
-	health.add_theme_stylebox_override("fill", _style(Color("ff6b88"), Color.TRANSPARENT, 2, 0))
-	col.add_child(health)
-	_button(row, "Ⅱ  Pause", game.pause_run, "pause")
+	health.add_theme_stylebox_override("background", _style(Color("233b46"), Color.TRANSPARENT, 4, 0))
+	health.add_theme_stylebox_override("fill", _style(ACCENT, Color.TRANSPARENT, 4, 0))
+	row.add_child(health)
+	wave_plate = _hud_panel(top, 28)
+	wave_plate.name = "WaveCapsule"
+	var wave_row = HBoxContainer.new()
+	wave_row.add_theme_constant_override("separation", 12)
+	wave_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	wave_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wave_plate.add_child(wave_row)
+	hud_stats = _label("WELLE 01", 22)
+	wave_row.add_child(hud_stats)
+	var divider = ColorRect.new()
+	divider.color = Color("354c58")
+	divider.custom_minimum_size = Vector2(1, 28)
+	divider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wave_row.add_child(divider)
+	clock = HudClock.new()
+	clock.custom_minimum_size = Vector2(30, 30)
+	clock.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	clock.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wave_row.add_child(clock)
+	timer_text = _label("00:20", 24, AMBER)
+	wave_row.add_child(timer_text)
+	currency_row = HBoxContainer.new()
+	currency_row.add_theme_constant_override("separation", 10)
+	currency_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top.add_child(currency_row)
+	point_text = _currency_chip(currency_row, "◇", ACCENT)
+	gold_text = _currency_chip(currency_row, "◉", AMBER)
+	pause_button = _button(currency_row, "Ⅱ", game.pause_run, "pause")
+	pause_button.custom_minimum_size = Vector2(52, 54)
+	pause_button.tooltip_text = "Pause"
+	pause_button.add_theme_font_size_override("font_size", 26)
+	pause_button.add_theme_stylebox_override("normal", _style(Color(0.035, 0.06, 0.075, 0.9), Color("6c8794"), 14, 12))
+	minimap_frame = _hud_panel(hud, 12)
+	minimap_frame.name = "MinimapFrame"
 	var map = MiniMap.new()
 	minimap = map
 	map.arena = game.arena
-	map.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	map.offset_left = -212
-	map.offset_right = -24
-	map.offset_top = 106
-	map.offset_bottom = 247
 	map.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hud.add_child(map)
+	minimap_frame.add_child(map)
 	fog = ColorRect.new()
 	fog.name = "AtmosphericFog"
 	fog.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -92,7 +132,8 @@ func _ready() -> void:
 	fog.material = fog_material
 	root.add_child(fog)
 	fog.hide()
-	fog_pause = _button(root, "Ⅱ  Pause", game.pause_run)
+	fog_pause = _button(root, "Ⅱ", game.pause_run)
+	fog_pause.tooltip_text = "Pause"
 	fog_pause.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
 	fog_pause.offset_left = -130
 	fog_pause.offset_right = -20
@@ -111,6 +152,55 @@ func _ready() -> void:
 	toast_label.offset_top = 100
 	toast_label.offset_bottom = 175
 	root.add_child(toast_label)
+	_layout_hud()
+
+func _hud_panel(parent: Node, radius: int = 14) -> PanelContainer:
+	var panel = PanelContainer.new()
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_theme_stylebox_override("panel", _style(Color(0.028, 0.048, 0.063, 0.92), Color(0.39, 0.51, 0.56, 0.72), radius, 12))
+	parent.add_child(panel)
+	return panel
+
+func _currency_chip(parent: Node, icon: String, color: Color) -> Label:
+	var panel = _hud_panel(parent)
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var row = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(row)
+	row.add_child(_label(icon, 22, color))
+	var label = _label("0", 22)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(label)
+	return label
+
+func _place(control: Control, rectangle: Rect2) -> void:
+	control.position = rectangle.position
+	control.size = rectangle.size
+
+func _layout_hud() -> void:
+	last_hud_size = root.size
+	var width = root.size.x
+	var compact = width < 1000
+	var stacked = width < 900
+	var margin = 24.0 if not stacked else 16.0
+	var health_width = 300.0 if not compact else 226.0
+	var wave_width = 314.0 if not compact else 260.0
+	var currencies_width = 280.0 if not compact else 260.0
+	_place(health_plate, Rect2(margin, 22, health_width, 54))
+	_place(wave_plate, Rect2((width - wave_width) / 2, 90 if stacked else 22, wave_width, 54))
+	_place(currency_row, Rect2(width - margin - currencies_width, 22, currencies_width, 54))
+	var map_width = 188.0 if not stacked else 152.0
+	_place(minimap_frame, Rect2(width - margin - map_width, 162 if stacked else 100, map_width, (map_width - 24) * 0.75 + 24))
+	hud_bar.offset_bottom = 146 if stacked else 78
+	health.custom_minimum_size.x = 130 if not compact else 70
+	hp_text.add_theme_font_size_override("font_size", 22 if not compact else 18)
+	hud_stats.add_theme_font_size_override("font_size", 22 if not compact else 18)
+	timer_text.add_theme_font_size_override("font_size", 24 if not compact else 20)
+	toast_label.offset_top = 152 if stacked else 94
+	toast_label.offset_bottom = 210 if stacked else 150
+	toast_label.add_theme_font_size_override("font_size", 16 if stacked else 18)
 
 func _style(background: Color, border: Color, radius: int, padding: int) -> StyleBoxFlat:
 	var box = StyleBoxFlat.new()
@@ -282,17 +372,20 @@ func play_screen() -> void:
 	update_hud()
 
 func update_hud() -> void:
-	var timer = "%02d:%02d" % [int(game.run_time / 60), int(game.run_time) % 60] if game.mode == "timeattack" else "%ds" % int(ceil(game.wave_time))
-	hud_stats.text = "WELLE %02d     %s     HP %d / %d     %d PKT     %d GOLD" % [game.wave, "BOSS" if game.boss_wave else timer, maxi(0, game.hp), game.max_hp, game.points, game.store.data.gold]
-	if root.size.x < 950:
-		hud_stats.add_theme_font_size_override("font_size", 13)
-	else:
-		hud_stats.add_theme_font_size_override("font_size", 20)
+	var remaining = int(ceil(game.run_time if game.mode == "timeattack" else game.wave_time))
+	hud_stats.text = "WELLE %02d" % game.wave
+	timer_text.text = "BOSS" if game.boss_wave else "%02d:%02d" % [remaining / 60, remaining % 60]
+	hp_text.text = "%d / %d" % [maxi(0, game.hp), game.max_hp]
+	point_text.text = str(game.points)
+	gold_text.text = str(game.store.data.gold)
+	clock.fraction = float(remaining) / (600.0 if game.mode == "timeattack" else minf(90, 20 + (game.wave - 1) * 2))
+	clock.queue_redraw()
 	health.max_value = game.max_hp
 	health.value = game.hp
 	var fog_active = game.modifier == "fog" and game.state == "playing"
 	hud_bar.visible = not fog_active
 	minimap.visible = not fog_active
+	minimap_frame.visible = not fog_active
 	fog.visible = fog_active
 	fog_pause.visible = fog_active
 
@@ -435,6 +528,8 @@ func toast(text: String) -> void:
 	toast_label.show()
 
 func _process(delta: float) -> void:
+	if root.size != last_hud_size:
+		_layout_hud()
 	if fog.visible:
 		fog.material.set_shader_parameter("mist_time", game.elapsed)
 		fog.material.set_shader_parameter("view_size", root.size)

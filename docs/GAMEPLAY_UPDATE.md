@@ -20,7 +20,8 @@ Umsetzung des Feedbacks vom 5. November 2026, geprüft mit Godot 4.6.3.
 - **Statuswerte:** Nur noch im Pausenmenü, einschließlich aller Upgrade-Level,
   Schaden, Bewegungstempo, Reichweite und tatsächlichem Schussintervall.
 - **Combo:** Keine feste Anzeige unten mehr. Jeder Kill erzeugt eine gelbe,
-  aufsteigende und ausblendende Zahl wie `3× COMBO` an der Gegnerposition.
+  aufsteigende und ausblendende Zahl wie `3` an der Gegnerposition. Das Wort
+  „Combo“ und das Multiplikationszeichen wurden im anschließenden UI-Update entfernt.
 - **Neue Karten:** Jede Welle wählt eine andere Layout-Familie und verteilt
   neun verschiedene Wandstrukturen neu, mit wechselnder Größe und Ausrichtung.
   Spawn, Shop-Pfad und Monument-Eingänge bleiben begehbar.
@@ -41,8 +42,8 @@ Umsetzung des Feedbacks vom 5. November 2026, geprüft mit Godot 4.6.3.
 
 ## Prüfung
 
-97 automatisierte Checks bestanden: 52 Basisprüfungen und 45 neue Regressionen,
-ohne Engine-/Scriptfehler. Zusätzlich elf Ansichten mit OpenGL/llvmpipe
+101 automatisierte Checks bestanden: 52 Basisprüfungen und 49 Regressionen,
+ohne Engine-/Scriptfehler. Zusätzlich 13 Ansichten mit OpenGL/llvmpipe
 gerendert und die betroffenen Darstellungen visuell geprüft. Die automatisierten
 Checks testen auch alle drei Monument-Eingänge mit dem großen Tank, acht neue
 Kartenlayouts und den HP-Verlauf über Shop und Wellenwechsel.

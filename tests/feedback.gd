@@ -27,6 +27,25 @@ func run() -> void:
 	await process_frame
 	game.start_run()
 	var arena = game.arena
+	await process_frame
+	await process_frame
+	expect(game.ui.health_plate.get_parent() == game.ui.hud_bar and game.ui.wave_plate.get_parent() == game.ui.hud_bar, "Health and wave use independent floating HUD modules")
+	expect(not game.ui.health_plate.get_global_rect().intersects(game.ui.wave_plate.get_global_rect()) and not game.ui.wave_plate.get_global_rect().intersects(game.ui.currency_row.get_global_rect()), "Floating HUD modules do not overlap at desktop size")
+	game.hp = 9
+	game.points = 142
+	game.wave_time = 28
+	game.ui.update_hud()
+	expect(game.ui.hp_text.text == "9 / 10" and game.ui.point_text.text == "142" and game.ui.timer_text.text == "00:28", "New HUD reports real health, currency and remaining time")
+	var previous_scale = root.content_scale_size
+	root.content_scale_size = Vector2i.ZERO
+	root.size = Vector2i(800, 600)
+	await process_frame
+	await process_frame
+	expect(not game.ui.health_plate.get_global_rect().intersects(game.ui.wave_plate.get_global_rect()) and not game.ui.wave_plate.get_global_rect().intersects(game.ui.currency_row.get_global_rect()), "Narrow windows stack the wave capsule without obscuring other HUD modules")
+	root.size = Vector2i(1280, 800)
+	root.content_scale_size = previous_scale
+	await process_frame
+	await process_frame
 	var monument: Dictionary
 	for object in arena.objects:
 		if object.kind == "old": monument = object
@@ -102,7 +121,7 @@ func run() -> void:
 	var death = arena.player + Vector2(80, 0)
 	var enemy = arena.spawn_enemy("runner", death)
 	arena.damage_enemy(enemy, 100)
-	expect(arena.floating_texts.size() == 1 and arena.floating_texts[0].text == "1× COMBO", "Kill creates a numbered combo popup at the enemy")
+	expect(arena.floating_texts.size() == 1 and arena.floating_texts[0].text == "1", "Kill popup contains only the combo number")
 	expect(arena.floating_texts[0].p.distance_to(death + Vector2(0, -25)) < 1, "Combo popup is anchored to the kill position")
 	arena.simulate(0.05)
 	expect(arena.floating_texts[0].p.y < death.y - 25 and arena.floating_texts[0].life < 1.15, "Combo popup rises and expires instead of staying in HUD")

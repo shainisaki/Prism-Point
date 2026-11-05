@@ -4,7 +4,9 @@ Native 2D-Version für **Godot 4.6+**, entwickelt und geprüft mit Godot 4.6.3.
 Das Spiel verwendet GDScript, Godot-Controls, Camera2D, AudioStreamPlayer und
 AStarGrid2D. Es benötigt **keinen Browser, kein HTML und keinen Webserver**.
 
-Die neuesten Änderungen mit Bildern stehen im [Gameplay-Update](docs/GAMEPLAY_UPDATE.md).
+Die neue Kombination aus minimalistischer UI und taktischer Farbwelt ist im
+[UI-Update mit Bildern](docs/UI_UPDATE.md) zu sehen. Die vorherigen Änderungen
+stehen im [Gameplay-Update](docs/GAMEPLAY_UPDATE.md).
 
 ## Öffnen und spielen
 
@@ -39,8 +41,9 @@ Die Minikarte deckt den tatsächlich sichtbaren Kartenausschnitt dauerhaft auf;
 unbesuchte Bereiche bleiben verborgen und werden bei einer neuen Welle
 zurückgesetzt. Der Nebel-Modifier erzeugt weichen Dunst über die ganze Sicht
 und blendet HP, Timer, Punkte/Gold und Minikarte aus. Pause bleibt erreichbar.
-Statuswerte stehen ausschließlich im Pausenmenü, Combo-Zahlen erscheinen
-kurzzeitig gelb am besiegten Gegner.
+Statuswerte stehen ausschließlich im Pausenmenü. Kill-Popups zeigen kurzzeitig
+nur die gelbe Zahl am besiegten Gegner, ohne „Combo“ oder „×“. Der Spieler hat
+keinen blauen Waffen-/Richtungsstrich mehr.
 
 ## Übertragene Inhalte
 
@@ -88,7 +91,7 @@ python3 tests/run.py
 ```
 
 Der Runner importiert Assets und führt echte GDScript-Integrationstests aus.
-Die Tests umfassen 52 Basis-Checks sowie 45 Regressionen für Monument,
+Die Tests umfassen 52 Basis-Checks sowie 49 Regressionen für HUD-Layout, Monument,
 Kartenaufdeckung, Nebel, HP-Verlauf, Herzen, Combo-Anzeigen und neue Layouts.
 Er prüft zusätzlich Engine-/Scriptfehler, weil Godot bei manchen Laufzeitfehlern
 trotzdem Exitcode 0 liefert. Es gibt keine npm-/Python-Paketabhängigkeiten.
