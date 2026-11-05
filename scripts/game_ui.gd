@@ -307,7 +307,7 @@ func _focus_current() -> void:
 		return
 	var all = overlay.find_children("*", "Button", true, false)
 	for button in all:
-		if not button.disabled:
+		if button.is_visible_in_tree() and not button.disabled:
 			button.grab_focus()
 			return
 
