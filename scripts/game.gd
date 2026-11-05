@@ -337,20 +337,26 @@ func overtime_factor() -> float:
 	# Keep arithmetic finite even in artificially long, invincible simulations.
 	return exp(minf(log(float(run_pref("overtime_growth"))) * overtime_level, log(1.0e12)))
 
+func overtime_speed_factor() -> float:
+	return minf(1.6, 1.0 + overtime_level * float(run_pref("overtime_speed")))
+
 func advance_overtime(delta: float) -> void:
 	if not goal_unlocked or boss_wave: return
 	overtime_time += delta
 	var level = 1 + int(floor((overtime_time + 0.00001) / float(run_pref("overtime_period"))))
 	if level == overtime_level: return
 	var previous = overtime_factor()
+	var previous_speed = overtime_speed_factor()
 	overtime_level = level
 	var growth = overtime_factor() / previous
+	var speed_growth = overtime_speed_factor() / previous_speed
 	# Preserve damage taken: current and maximum HP grow by the same factor.
 	var shared_pools: Array[Dictionary] = []
 	for enemy in arena.enemies:
 		if enemy.hp > 0:
 			enemy.hp *= growth
 			enemy.max_hp *= growth
+			if not enemy.boss: enemy.speed *= speed_growth
 			if enemy.has("shared"):
 				var already_scaled = false
 				for pool in shared_pools:
@@ -359,7 +365,6 @@ func advance_overtime(delta: float) -> void:
 					enemy.shared.hp *= growth
 					enemy.shared.max_hp *= growth
 					shared_pools.append(enemy.shared)
-	arena.spawn_cd = minf(arena.spawn_cd / growth, arena.spawn_interval())
 
 func player_damage() -> float:
 	var level = float(stats.damage)

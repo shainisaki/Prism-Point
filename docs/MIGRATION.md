@@ -63,7 +63,10 @@ Weitere 62 Checks in `tests/options.gd` prüfen die Eskalation nach Shop-Aktivie
 vorhandene und neue Gegner-HP, Pausieren/Zurücksetzen, transaktionale Optionen,
 Speichern und Speicherfehler, sieben Kategorien, Tasten-Konflikte, Run-Balance,
 Audio-/Grafik-/HUD-Wirkungen und kleine Fenster mit großer Schrift.
-Aktuelles Gesamtergebnis mit Godot 4.6.3: 214 Checks bestanden, keine
+Weitere 20 Checks in `tests/spatial.gd` vergleichen indizierte Kollisionen,
+Sichtlinien, Gegnerbewegung, Geschoss-/Objekttreffer und Weg-Caches mit der
+vollständigen Suche. Hinzu kommen Audio-Caching und die lineare Tempo-Eskalation.
+Aktuelles Gesamtergebnis mit Godot 4.6.3: 234 Checks bestanden, keine
 Engine-/Scriptfehler. Bilder und Änderungen: [Gameplay-Update](GAMEPLAY_UPDATE.md).
 Die neue UI-Kombination und kleine Fenstergrößen: [UI-Update](UI_UPDATE.md).
 
@@ -82,3 +85,6 @@ Punkte, Bewegungsgefühl und das neue Pausenmenü zeigt das
 [Bewegungs- und UI-Update](FEEL_UPDATE.md).
 Shopsuche ohne Weglinie und die neue Einstellungszentrale stehen im
 [Options-Update](OPTIONS_UPDATE.md).
+Die aktuelle Eskalation erhöht HP und langsam das Tempo bei konstanter
+Spawnmenge. Messungen mit unveränderter Objektzahl und die Optimierungen
+beschreibt das [Performance-Update](PERFORMANCE_UPDATE.md).

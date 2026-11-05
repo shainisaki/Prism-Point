@@ -1,7 +1,8 @@
 # PRISM POINT — Godot
 
 Native 2D-Version für **Godot 4.6+**, entwickelt und geprüft mit Godot 4.6.3.
-Aktueller Stand: [Shopsuche, Eskalation und 60 Einstellungen mit Bildern](docs/OPTIONS_UPDATE.md).
+Aktueller Stand: [Performance-Analyse und schonendere Eskalation](docs/PERFORMANCE_UPDATE.md).
+Die Einstellungszentrale mit Bildern steht im [Options-Update](docs/OPTIONS_UPDATE.md).
 Punkte, dynamische Bewegung und das Pausenmenü stehen im [Bewegungs-Update](docs/FEEL_UPDATE.md).
 Das [Elektronik-Update](docs/TECH_UPDATE.md) beschreibt Druckplatte, Datenchip und Schaltkreis-Boden.
 Das Spiel verwendet GDScript, Godot-Controls, Camera2D, AudioStreamPlayer und
@@ -36,9 +37,10 @@ Die Haupttasten lassen sich in **Optionen** neu belegen; Pfeiltasten und
 Gamepad bleiben als Alternativen verfügbar. Der erste Kauf legt den Build fest.
 Nach dem Wellen-Timer den Shop selbst suchen: Es gibt keine Weglinie, auch
 nicht auf der Minikarte. Nach einem Boss-Sieg wird der Shop ebenfalls aktiviert.
-Während der Suche spawnen weiter Gegner, sofort häufiger und in größerer Zahl.
-Alle **7,5 Sekunden** steigen Gegnerzahl und HP um **×1,5**; das Spawnintervall
-wird durch **1,5** geteilt. Erst im Shop-Menü pausiert der Kampf.
+Während der Suche spawnen weiter Gegner. Die Eskalation erhöht ihre HP statt
+ihre Anzahl: sofort **×1,5 HP**, danach alle **7,5 Sekunden** erneut **×1,5 HP**.
+Das Tempo wächst langsam um **3% des Basistempos pro Stufe**, höchstens +60%.
+Spawnmenge und Spawnintervall bleiben dabei konstant. Erst im Shop-Menü pausiert der Kampf.
 Gold schaltet dauerhaft Charaktere frei.
 
 HP bleiben beim Shopbesuch und Wellenwechsel erhalten. Besiegte Gegner haben
@@ -61,7 +63,7 @@ schnelles Abbremsen, eine kurze Spur in der Charakterfarbe und eine dezent
 nachführende Kamera machen die Bewegung dynamischer. Im Pausenmenü öffnen
 eigene Schaltflächen Audio, Anzeige, Steuerung und Kompendium.
 
-Die Einstellungszentrale bietet **60 Einstellungen plus sechs Tastenbelegungen**
+Die Einstellungszentrale bietet **61 Einstellungen plus sechs Tastenbelegungen**
 in den Kategorien Audio, Grafik, Schwierigkeit, Steuerung, HUD, Barrierefreiheit
 und Spiel. Änderungen bleiben beim Kategorienwechsel erhalten und werden mit
 **Anwenden** gespeichert. **Verwerfen**, Kategorie-/Gesamtstandard und eine
@@ -124,7 +126,9 @@ Weitere 31 Checks prüfen Punkteverschmelzung, Werterhalt, 5.000 dichte Drops,
 Bewegung bei mehreren Bildraten, bündige Wandecken und die Pausen-Schaltflächen:
 Weitere 62 Checks prüfen Eskalation, Optionen-Entwürfe, Anwenden/Verwerfen,
 Speicherfehler, Tastenbelegung, tatsächliche Laufzeitwirkungen und kleine Fenster:
-insgesamt **214 bestandene Checks**.
+Weitere 20 Checks vergleichen beschleunigte Kollisionen, Treffer, Bewegung und
+Wegsuche direkt mit der Vollsuche und prüfen Audio-Caching sowie die neue
+Tempo-Eskalation: insgesamt **234 bestandene Checks**.
 Er prüft zusätzlich Engine-/Scriptfehler, weil Godot bei manchen Laufzeitfehlern
 trotzdem Exitcode 0 liefert. Es gibt keine npm-/Python-Paketabhängigkeiten.
 Für den optionalen visuellen Test mit verfügbarem Bildschirm:
@@ -135,6 +139,16 @@ godot --path . --audio-driver Dummy --script tests/render.gd
 
 Er erzeugt Screenshots unter `/tmp/prism-*.png` (Linux). Die Spieltests prüfen
 keinen hörbaren Klang, keine physischen Controller und keine Mobilgeräte.
+
+Optionaler CPU-Stresstest mit identischen Objektzahlen und JSON-Ausgabe:
+
+```sh
+godot --headless --path . --script tests/performance.gd -- /tmp/prism-performance.json
+```
+
+Die gemessene Simulationszeit sank auf dieser Umgebung bei 160 Gegnern,
+400 Geschossen und 400 Sammelobjekten von 70,6 auf 8,6 ms im Median.
+Das ist eine CPU-Messung, keine plattformübergreifende FPS-Garantie.
 
 ## Desktop exportieren
 

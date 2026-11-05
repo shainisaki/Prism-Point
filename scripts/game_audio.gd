@@ -1,12 +1,15 @@
 extends Node
 
 const TRACKS := {"sternenlauf": "Sternenlauf Protokoll", "broken": "Broken Docking Bay", "lightspeed": "Lightspeed Galaxy"}
+const FREQUENCIES = {"shot": 640.0, "hit": 320.0, "kill": 880.0, "hurt": 110.0, "collect": 1100.0, "boss": 75.0, "ui": 440.0}
+const GROUPS = {"shot": "shot_volume", "hit": "hit_volume", "kill": "hit_volume", "hurt": "warning_volume", "boss": "warning_volume", "collect": "collect_volume", "ui": "ui_volume"}
 var music: AudioStreamPlayer
 var sounds: Array[AudioStreamPlayer] = []
 var settings: Dictionary
 var current_song := ""
 var sound_index := 0
 var focused := true
+var effect_streams: Dictionary = {}
 
 func _exit_tree() -> void:
 	# Explicitly release looping decoders, including with the headless audio driver.
@@ -17,6 +20,7 @@ func _exit_tree() -> void:
 		if is_instance_valid(voice):
 			voice.stop()
 			voice.stream = null
+	effect_streams.clear()
 
 func _ready() -> void:
 	music = AudioStreamPlayer.new()
@@ -25,6 +29,7 @@ func _ready() -> void:
 		var voice := AudioStreamPlayer.new()
 		add_child(voice)
 		sounds.append(voice)
+	for kind in FREQUENCIES: effect_streams[kind] = make_effect(kind)
 
 func apply_settings(value: Dictionary) -> void:
 	settings = value.duplicate(true)
@@ -51,13 +56,20 @@ func update_music_gain() -> void:
 	music.stream_paused = not settings.get("music", true) or gain <= 0 or (not focused and settings.get("mute_unfocused", true))
 
 func effect_gain(kind: String) -> float:
-	var group = {"shot": "shot_volume", "hit": "hit_volume", "kill": "hit_volume", "hurt": "warning_volume", "boss": "warning_volume", "collect": "collect_volume", "ui": "ui_volume"}.get(kind, "sfx_volume")
+	var group = GROUPS.get(kind, "sfx_volume")
 	return float(settings.get("master_volume", 1.0)) * float(settings.get("sfx_volume", 0.8)) * float(settings.get(group, 1.0))
 
 func effect(kind: String) -> void:
 	if not settings.get("sound", true) or sounds.is_empty() or effect_gain(kind) <= 0 or (not focused and settings.get("mute_unfocused", true)):
 		return
-	var frequency := {"shot": 640.0, "hit": 320.0, "kill": 880.0, "hurt": 110.0, "collect": 1100.0, "boss": 75.0}.get(kind, 440.0) as float
+	var voice := sounds[sound_index % sounds.size()]
+	sound_index += 1
+	voice.stream = effect_streams.get(kind, effect_streams.ui)
+	voice.volume_db = linear_to_db(maxf(effect_gain(kind), 0.00001)) - 8.0
+	voice.play()
+
+func make_effect(kind: String) -> AudioStreamWAV:
+	var frequency := FREQUENCIES.get(kind, 440.0) as float
 	var duration := 0.07 if kind != "boss" else 0.4
 	var samples := PackedByteArray()
 	var count := int(22050 * duration)
@@ -71,8 +83,4 @@ func effect(kind: String) -> void:
 	stream.format = AudioStreamWAV.FORMAT_16_BITS
 	stream.mix_rate = 22050
 	stream.data = samples
-	var voice := sounds[sound_index % sounds.size()]
-	sound_index += 1
-	voice.stream = stream
-	voice.volume_db = linear_to_db(maxf(effect_gain(kind), 0.00001)) - 8.0
-	voice.play()
+	return stream

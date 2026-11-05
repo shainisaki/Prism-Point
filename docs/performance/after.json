@@ -1,0 +1,65 @@
+{
+	"audio_20_events": {
+		"max_ms": 0.127,
+		"median_ms": 0.092,
+		"p95_ms": 0.127
+	},
+	"collision_400": {
+		"max_ms": 1.08,
+		"median_ms": 0.921,
+		"p95_ms": 1.025
+	},
+	"dense_exhaustive": {
+		"max_ms": 489.527,
+		"median_ms": 426.119,
+		"p95_ms": 489.527
+	},
+	"dense_indexed": {
+		"max_ms": 60.59,
+		"median_ms": 55.658,
+		"p95_ms": 60.59
+	},
+	"enemy_updates": {
+		"max_ms": 6.015,
+		"median_ms": 5.67,
+		"p95_ms": 5.982
+	},
+	"fixture": {
+		"bullets": 200,
+		"enemies": 160,
+		"hostile": 200,
+		"monument_segments": 6,
+		"pickups": 400,
+		"walls": 64
+	},
+	"friendly_projectiles": {
+		"max_ms": 1.729,
+		"median_ms": 1.458,
+		"p95_ms": 1.691
+	},
+	"full_simulation": {
+		"max_ms": 14.89,
+		"median_ms": 8.634,
+		"p95_ms": 9.876
+	},
+	"hostile_projectiles": {
+		"max_ms": 0.766,
+		"median_ms": 0.66,
+		"p95_ms": 0.698
+	},
+	"hud_update": {
+		"max_ms": 0.018,
+		"median_ms": 0.011,
+		"p95_ms": 0.013
+	},
+	"map_reveal": {
+		"max_ms": 0.003,
+		"median_ms": 0.002,
+		"p95_ms": 0.003
+	},
+	"visibility_160": {
+		"max_ms": 0.637,
+		"median_ms": 0.467,
+		"p95_ms": 0.571
+	}
+}

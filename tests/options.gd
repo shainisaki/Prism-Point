@@ -39,8 +39,8 @@ func run() -> void:
 	game.goal_unlocked = true
 	game.advance_overtime(0)
 	expect(game.overtime_level == 1 and approx(game.overtime_factor(), 1.5), "Unlocking the shop immediately adds 1.5x pressure")
-	expect(approx(arena.spawn_interval(), initial_interval / 1.5), "Overtime shortens spawn intervals instead of making spawns slower")
-	expect(arena.spawn_count(2) == 3, "Overtime increases the number of enemies per spawn")
+	expect(approx(arena.spawn_interval(), initial_interval), "Overtime keeps spawn intervals unchanged while increasing enemy strength")
+	expect(arena.spawn_count(2) == 2, "Overtime does not multiply the number of enemies per spawn")
 	expect(approx(mob.max_hp, initial_max * 1.5) and approx(mob.hp / mob.max_hp, 0.5), "Existing enemies gain HP while preserving the damage fraction")
 	game.advance_overtime(7.49)
 	expect(game.overtime_level == 1, "Pressure does not rise before 7.5 seconds")
@@ -235,6 +235,10 @@ func run() -> void:
 	var footer = ui.buttons.apply_options.get_global_rect()
 	expect(footer.end.y <= root.size.y and footer.position.x >= 0, "Apply stays on screen at 800x600 with 140 percent text")
 	game.audio.music.stop()
+	game.audio.music.stream = null
+	# The much faster test can now finish before the headless mixer has released
+	# its looping decoder. Let that real playback complete its shutdown first.
+	await create_timer(0.25).timeout
 	game.queue_free()
 	await process_frame
 	DirAccess.remove_absolute(normal_path)

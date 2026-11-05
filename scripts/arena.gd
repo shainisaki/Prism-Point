@@ -6,6 +6,8 @@ const Layout = preload("res://scripts/arena_layout.gd")
 const TechArt = preload("res://scripts/tech_monuments.gd")
 const PointSymbol = preload("res://scripts/point_symbol.gd")
 const PointClusters = preload("res://scripts/point_clusters.gd")
+const SpatialIndex = preload("res://scripts/spatial_index.gd")
+const WorldCollision = preload("res://scripts/world_collision.gd")
 const DATA_FIELD_DISTANCE = 240.0
 const DATA_DOWNLOAD_TIME = 1.2
 const HEART_DROP_CHANCE = 0.08
@@ -65,6 +67,15 @@ var next_id := 1
 var laser_event_cd := 3.0
 var crystal_texture: Texture2D
 var floor_surface: ColorRect
+var world_collision = WorldCollision.new()
+var enemy_index = SpatialIndex.new()
+var object_index = SpatialIndex.new()
+var indexed_enemies: Array[Dictionary] = []
+var indexed_objects: Array[Dictionary] = []
+var enemy_slots: Dictionary = {}
+var cell_cache: Dictionary = {}
+var path_cache: Dictionary = {}
+var spatial_frame_active := false
 
 func _ready() -> void:
 	floor_surface = ColorRect.new()
@@ -317,6 +328,7 @@ func random_open(min_distance: float = 0.0) -> Vector2:
 	return p
 
 func closest_cell(p: Vector2) -> Vector2i:
+	if spatial_frame_active and cell_cache.has(p): return cell_cache[p]
 	var cell = Vector2i((p / grid.cell_size).floor())
 	if grid.is_in_boundsv(cell) and not grid.is_point_solid(cell):
 		return cell
@@ -327,6 +339,7 @@ func closest_cell(p: Vector2) -> Vector2i:
 		if d < distance:
 			distance = d
 			nearest = candidate
+	if spatial_frame_active: cell_cache[p] = nearest
 	return nearest
 
 func random_spawn() -> Vector2:
@@ -337,6 +350,7 @@ func random_spawn() -> Vector2:
 	return random_open(180)
 
 func blocked(p: Vector2, radius: float) -> bool:
+	if spatial_frame_active: return world_collision.blocked(p, radius)
 	for wall in walls:
 		if circle_rect(p, radius, wall):
 			return true
@@ -353,15 +367,20 @@ func blocked(p: Vector2, radius: float) -> bool:
 func circle_rect(p: Vector2, radius: float, rect: Rect2) -> bool:
 	return p.distance_squared_to(p.clamp(rect.position, rect.end)) < radius * radius
 
-func move_circle(p: Vector2, movement: Vector2, radius: float, include_objects: bool = false) -> Vector2:
+func move_circle(p: Vector2, movement: Vector2, radius: float, include_objects: bool = false, geometry_slots: Variant = null) -> Vector2:
+	if geometry_slots != null and geometry_slots.is_empty():
+		var destination = p + movement
+		return move_player_at_rest(destination, radius) if include_objects else destination.clamp(Vector2.ONE * (radius + 28), SIZE - Vector2.ONE * (radius + 28))
+	if movement == Vector2.ZERO:
+		return p.clamp(Vector2.ONE * (radius + 28), SIZE - Vector2.ONE * (radius + 28)) if not include_objects else move_player_at_rest(p, radius)
 	var steps = maxi(1, int(ceil(movement.length() / maxf(8, radius))))
 	var step = movement / steps
 	for i in steps:
 		var next = p + Vector2(step.x, 0)
-		if not blocked(next, radius):
+		if not (world_collision.blocked_in(next, radius, geometry_slots) if geometry_slots != null else blocked(next, radius)):
 			p = next
 		next = p + Vector2(0, step.y)
-		if not blocked(next, radius):
+		if not (world_collision.blocked_in(next, radius, geometry_slots) if geometry_slots != null else blocked(next, radius)):
 			p = next
 	if include_objects:
 		for object in objects:
@@ -375,7 +394,19 @@ func move_circle(p: Vector2, movement: Vector2, radius: float, include_objects: 
 					p = pushed
 	return p.clamp(Vector2.ONE * (radius + 28), SIZE - Vector2.ONE * (radius + 28))
 
+func move_player_at_rest(p: Vector2, radius: float) -> Vector2:
+	# Keep stationary crate/barrel push-out behavior without two empty wall sweeps.
+	for object in objects:
+		if object.kind not in ["crate", "barrel"] or object.hp <= 0: continue
+		var diff = p - object.p
+		var min_dist = radius + object.r
+		if diff.length() < min_dist:
+			var pushed = object.p + diff.normalized() * min_dist
+			if not blocked(pushed, radius): p = pushed
+	return p.clamp(Vector2.ONE * (radius + 28), SIZE - Vector2.ONE * (radius + 28))
+
 func line_clear(a: Vector2, b: Vector2) -> bool:
+	if spatial_frame_active: return world_collision.line_clear(a, b)
 	for segment in monument_walls:
 		if Geometry2D.segment_intersects_segment(a, b, segment.a, segment.b) != null:
 			return false
@@ -389,6 +420,7 @@ func line_clear(a: Vector2, b: Vector2) -> bool:
 	return true
 
 func simulate(delta: float) -> void:
+	begin_spatial_frame()
 	var direction = Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	if not game.pref("gamepad"):
 		direction = Vector2.ZERO
@@ -461,6 +493,56 @@ func simulate(delta: float) -> void:
 		floating_texts[i].p.y -= 42.0 * delta
 		if floating_texts[i].life <= 0:
 			floating_texts.remove_at(i)
+	end_spatial_frame()
+
+func begin_spatial_frame() -> void:
+	world_collision.sync(walls, monument_walls)
+	cell_cache.clear()
+	path_cache.clear()
+	enemy_index.clear()
+	indexed_enemies.clear()
+	enemy_slots.clear()
+	for enemy in enemies: index_enemy(enemy)
+	object_index.clear()
+	indexed_objects.clear()
+	for object in objects:
+		if object.kind in ["crate", "barrel", "crystal"] and object.hp > 0:
+			object_index.add(enemy_bounds(object))
+			indexed_objects.append(object)
+	spatial_frame_active = true
+
+func end_spatial_frame() -> void:
+	spatial_frame_active = false
+
+func enemy_bounds(enemy: Dictionary) -> Rect2:
+	return Rect2(enemy.p - Vector2.ONE * enemy.r, Vector2.ONE * enemy.r * 2)
+
+func index_enemy(enemy: Dictionary) -> void:
+	var slot = enemy_index.add(enemy_bounds(enemy))
+	enemy_slots[enemy.id] = slot
+	indexed_enemies.append(enemy)
+
+func append_enemy(enemy: Dictionary) -> void:
+	enemies.append(enemy)
+	if spatial_frame_active: index_enemy(enemy)
+
+func update_enemy_index(enemy: Dictionary) -> void:
+	if spatial_frame_active:
+		enemy_index.update(enemy_slots[enemy.id], enemy_bounds(enemy))
+
+func enemy_candidates(a: Vector2, b: Vector2, radius: float) -> Array[Dictionary]:
+	if not spatial_frame_active: return enemies.duplicate()
+	var result: Array[Dictionary] = []
+	for slot in enemy_index.query(Rect2(a, Vector2.ZERO).expand(b).grow(radius)):
+		result.append(indexed_enemies[slot])
+	return result
+
+func object_candidates(a: Vector2, b: Vector2, radius: float) -> Array[Dictionary]:
+	if not spatial_frame_active: return objects.duplicate()
+	var result: Array[Dictionary] = []
+	for slot in object_index.query(Rect2(a, Vector2.ZERO).expand(b).grow(radius)):
+		result.append(indexed_objects[slot])
+	return result
 
 func step_player(direction: Vector2, delta: float) -> void:
 	if direction.length() > 0.1:
@@ -507,11 +589,11 @@ func player_color() -> Color:
 
 func spawn_interval() -> float:
 	var base = maxf(0.65, 2.2 - (game.wave - 1) * 0.048 - game.difficulty() * 0.00018)
-	return maxf(0.04, base / (float(game.run_pref("spawn_frequency")) * game.overtime_factor()))
+	return maxf(0.04, base / float(game.run_pref("spawn_frequency")))
 
 func spawn_count(base: int = -1) -> int:
 	if base < 0: base = randi_range(1, mini(8, 2 + int((game.wave - 1) * 0.4))) + (2 if game.modifier == "swarm" else 0)
-	return int(clampf(ceil(base * float(game.run_pref("spawn_amount")) * game.overtime_factor()), 1, 160))
+	return int(clampf(ceil(base * float(game.run_pref("spawn_amount"))), 1, 160))
 
 func pick_enemy_type() -> String:
 	if game.modifier == "swarm":
@@ -541,8 +623,9 @@ func spawn_enemy(kind: String, p: Vector2) -> Dictionary:
 	if kind == "lootling":
 		enemy.hp = 12.0 * float(game.run_pref("enemy_health")) * game.overtime_factor()
 		enemy.max_hp = enemy.hp
+	enemy.speed *= game.overtime_speed_factor()
 	next_id += 1
-	enemies.append(enemy)
+	append_enemy(enemy)
 	return enemy
 
 func spawn_boss(kind: String = "", elite: bool = false) -> void:
@@ -561,13 +644,14 @@ func spawn_boss(kind: String = "", elite: bool = false) -> void:
 				walls.remove_at(i)
 		for i in 6:
 			var node = boss_dictionary("endboss_node", center + Vector2.from_angle(TAU * i / 6.0) * 220, 36, 240, Color.WHITE, false)
-			enemies.append(node)
-		enemies.append(boss_dictionary(kind, center, 70, 2000, Color.WHITE, false))
+			append_enemy(node)
+		append_enemy(boss_dictionary(kind, center, 70, 2000, Color.WHITE, false))
 		player = center + Vector2(0, 420)
+		if spatial_frame_active: world_collision.sync(walls, monument_walls)
 		return
 	var colors = {"hexagon": Color("c070ff"), "triangle": Color("ff6644"), "square": Color("44aaff"), "cylinder": Color("8b5a2b")}
 	var boss = boss_dictionary(kind, center, 60.0 if kind != "cylinder" else 110.0, health, colors[kind], elite)
-	enemies.append(boss)
+	append_enemy(boss)
 	if kind == "cylinder":
 		var shared = {"hp": health, "max_hp": health}
 		boss.shared = shared
@@ -575,8 +659,9 @@ func spawn_boss(kind: String = "", elite: bool = false) -> void:
 			var clone = boss_dictionary(kind, Vector2(220, SIZE.y * (i + 1) / 5.0), 110, health, colors[kind], elite)
 			clone.shared = shared
 			clone.velocity = Vector2(randf_range(270, 330), 0)
-			enemies.append(clone)
+			append_enemy(clone)
 		boss.velocity = Vector2(300, 0)
+	if spatial_frame_active: world_collision.sync(walls, monument_walls)
 
 func boss_dictionary(kind: String, p: Vector2, radius: float, health: float, color: Color, elite: bool) -> Dictionary:
 	if kind in ["endboss", "endboss_node"]: health *= float(game.run_pref("enemy_health"))
@@ -620,16 +705,47 @@ func update_enemy(enemy: Dictionary, delta: float) -> void:
 			enemy.dash -= delta
 			movement = enemy.velocity * delta
 		enemy.p = move_circle(enemy.p, movement, enemy.r)
-	# Mild separation keeps overlapping hordes readable without blocking paths.
-	for other in enemies:
-		if other.id == enemy.id or other.hp <= 0:
-			continue
-		var diff = enemy.p - other.p
-		var radius = (enemy.r + other.r) * 0.8
-		if diff.length_squared() < radius * radius and diff.length_squared() > 0.01:
-			enemy.p = move_circle(enemy.p, diff.normalized() * 35 * delta, enemy.r)
+	update_enemy_index(enemy)
+	separate_enemy(enemy, delta)
 	if enemy.p.distance_to(player) < player_radius + enemy.r and not enemy.get("invisible", false):
 		game.hurt(maxi(1, int(round(game.enemy_damage_mult * (2 if enemy.boss else 1)))), enemy)
+
+func separate_enemy(enemy: Dictionary, delta: float) -> void:
+	if not spatial_frame_active:
+		for other in enemies:
+			if other.id != enemy.id and other.hp > 0: push_enemy(enemy, other, delta)
+		return
+	var slots = enemy_index.query(Rect2(enemy.p, Vector2.ZERO).grow(enemy.r * 0.8))
+	# All possible pushes in this pass fit in this envelope. Reuse its exact
+	# wall candidates rather than querying the same cells for every contact.
+	var envelope = Rect2(enemy.p, Vector2.ZERO).grow(enemy.r + 35 * delta * maxi(0, indexed_enemies.size() - 1))
+	var geometry_slots = world_collision.index.query(envelope)
+	var i = 0
+	var expanded = false
+	var initial_position = enemy.p
+	while i < slots.size():
+		var slot = slots[i]
+		var other = indexed_enemies[slot]
+		i += 1
+		if other.id == enemy.id or other.hp <= 0: continue
+		var before = enemy.p
+		push_enemy(enemy, other, delta, geometry_slots)
+		if enemy.p != before and not expanded:
+			# Each remaining neighbor can displace this enemy by at most 35*delta.
+			# Query that whole conservative envelope once, so packed hordes don't
+			# rebuild and sort a neighbor list after every individual push.
+			var reach = enemy.r * 0.8 + 35 * delta * maxi(0, indexed_enemies.size() - slot - 1)
+			slots = enemy_index.query(Rect2(enemy.p, Vector2.ZERO).grow(reach), slot)
+			i = 0
+			expanded = true
+	if enemy.p != initial_position: update_enemy_index(enemy)
+
+func push_enemy(enemy: Dictionary, other: Dictionary, delta: float, geometry_slots: Variant = null) -> void:
+	var diff = enemy.p - other.p
+	var distance_squared = diff.length_squared()
+	var radius = (enemy.r + other.r) * 0.8
+	if distance_squared < radius * radius and distance_squared > 0.01:
+		enemy.p = move_circle(enemy.p, diff / sqrt(distance_squared) * 35 * delta, enemy.r, false, geometry_slots)
 
 func navigate(enemy: Dictionary, delta: float) -> Vector2:
 	enemy.nav_cd -= delta
@@ -637,7 +753,12 @@ func navigate(enemy: Dictionary, delta: float) -> Vector2:
 		enemy.nav_cd = randf_range(0.4, 0.7)
 		var a = closest_cell(enemy.p)
 		var b = closest_cell(player)
-		enemy.path = grid.get_point_path(a, b)
+		var key = Vector4i(a.x, a.y, b.x, b.y)
+		if spatial_frame_active and path_cache.has(key):
+			enemy.path = path_cache[key].duplicate()
+		else:
+			enemy.path = grid.get_point_path(a, b)
+			if spatial_frame_active: path_cache[key] = enemy.path.duplicate()
 	while enemy.path.size() > 0 and enemy.p.distance_to(enemy.path[0]) < 65:
 		enemy.path.remove_at(0)
 	return (enemy.path[0] - enemy.p).normalized() if enemy.path.size() > 0 else (player - enemy.p).normalized()
@@ -663,7 +784,7 @@ func update_boss(enemy: Dictionary, delta: float) -> void:
 				clone.shared = enemy.shared
 				clone.hp = enemy.hp
 				clone.duplicated = true
-				enemies.append(clone)
+				append_enemy(clone)
 		enemy.invisible = phase >= 2 and fmod(enemy.age, 8.0) > 6.0
 		if enemy.cd <= 0:
 			for i in 6 + phase * 2:
@@ -760,7 +881,7 @@ func update_projectiles(collection: Array[Dictionary], delta: float, hostile: bo
 				game.hurt(bullet.damage)
 				remove = true
 		else:
-			for enemy in enemies.duplicate():
+			for enemy in enemy_candidates(old, bullet.p, bullet.r):
 				if enemy.hp <= 0 or bullet.hit.has(enemy.id) or enemy.get("invisible", false):
 					continue
 				if Geometry2D.get_closest_point_to_segment(enemy.p, old, bullet.p).distance_to(enemy.p) < enemy.r + bullet.r:
@@ -770,7 +891,7 @@ func update_projectiles(collection: Array[Dictionary], delta: float, hostile: bo
 					if not bullet.pierce or bullet.grenade:
 						remove = true
 						break
-			for object in objects:
+			for object in object_candidates(old, bullet.p, bullet.r):
 				if object.kind not in ["crate", "barrel", "crystal"] or object.hp <= 0:
 					continue
 				if Geometry2D.get_closest_point_to_segment(object.p, old, bullet.p).distance_to(object.p) < object.r + bullet.r:

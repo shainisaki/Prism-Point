@@ -48,8 +48,9 @@ static func schema() -> Dictionary:
 		["spawn_frequency", "Spawn-Häufigkeit", "Höhere Werte verkürzen die Zeit zwischen Spawns.", 1.0, 0.5, 3.0, 0.1],
 		["heart_chance", "Herz-Dropchance", "Wahrscheinlichkeit pro besiegtem Gegner. Ein Herz heilt 1 HP.", 0.08, 0.0, 0.4, 0.01],
 		["wave_duration", "Wellenlänge", "Multiplikator für die Zeit bis zur Shop-Aktivierung.", 1.0, 0.5, 2.0, 0.1],
-		["overtime_period", "Eskalation: Zeitabstand", "Nach Shop-Aktivierung steigt der Druck in diesem Abstand (Sekunden).", 7.5, 5.0, 15.0, 0.5],
-		["overtime_growth", "Eskalation: Wachstumsfaktor", "Mehr Gegner, kürzere Spawn-Abstände und mehr HP pro Stufe.", 1.5, 1.1, 2.0, 0.1],
+		["overtime_period", "Eskalation: Zeitabstand", "Nach Shop-Aktivierung steigen HP und Tempo in diesem Abstand (Sekunden).", 7.5, 5.0, 15.0, 0.5],
+		["overtime_growth", "Eskalation: HP-Faktor", "Mehr Gegner-HP pro Stufe. Anzahl und Spawn-Abstände bleiben gleich.", 1.5, 1.1, 2.0, 0.1],
+		["overtime_speed", "Eskalation: Tempozuwachs", "Tempo pro Stufe, bezogen auf das Basistempo. Insgesamt höchstens +60%.", 0.03, 0.0, 0.1, 0.01],
 	],
 	"controls": [
 		["gamepad", "Gamepad-Bewegung", "Linken Stick und Steuerkreuz zur Bewegung verwenden.", true],
@@ -117,7 +118,7 @@ static func normalize(values: Dictionary) -> Dictionary:
 	return result
 
 static func difficulty_profile(id: String) -> Dictionary:
-	var result = {"enemy_health": 1.0, "enemy_speed": 1.0, "enemy_damage": 1.0, "spawn_amount": 1.0, "spawn_frequency": 1.0, "heart_chance": 0.08, "wave_duration": 1.0, "overtime_period": 7.5, "overtime_growth": 1.5}
+	var result = {"enemy_health": 1.0, "enemy_speed": 1.0, "enemy_damage": 1.0, "spawn_amount": 1.0, "spawn_frequency": 1.0, "heart_chance": 0.08, "wave_duration": 1.0, "overtime_period": 7.5, "overtime_growth": 1.5, "overtime_speed": 0.03}
 	match id:
 		"relaxed": result.merge({"enemy_health": 0.7, "enemy_speed": 0.85, "enemy_damage": 0.7, "spawn_amount": 0.7, "spawn_frequency": 0.8, "heart_chance": 0.16}, true)
 		"hard": result.merge({"enemy_health": 1.5, "enemy_speed": 1.15, "enemy_damage": 1.5, "spawn_amount": 1.5, "spawn_frequency": 1.25, "heart_chance": 0.04}, true)

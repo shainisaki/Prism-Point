@@ -1,5 +1,9 @@
 # Shopsuche und Einstellungszentrale
 
+Dieser Bericht beschreibt den vorherigen Stand. Das
+[Performance-Update](PERFORMANCE_UPDATE.md) ersetzt die mengenbasierte
+Eskalation durch HP und langsam steigendes Tempo und ergänzt dessen Regler.
+
 ## Shop suchen unter steigendem Druck
 
 Die Weglinie zum Shop ist aus der Arena und der Minikarte entfernt. Der Shop
