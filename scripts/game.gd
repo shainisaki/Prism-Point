@@ -94,6 +94,12 @@ func _setup_input() -> void:
 		button.device = ALL_JOYPADS
 		button.button_index = entry[1]
 		InputMap.action_add_event(entry[0], button)
+	# Use the same device wildcard for menu confirmation as for gameplay.
+	var accept = InputEventJoypadButton.new()
+	accept.device = ALL_JOYPADS
+	accept.button_index = JOY_BUTTON_A
+	if not InputMap.action_has_event("ui_accept", accept):
+		InputMap.action_add_event("ui_accept", accept)
 	for action in store.data.settings.get("keys", {}):
 		if DEFAULT_KEYS.has(action):
 			bind_key(action, int(store.data.settings["keys"][action]), false)
@@ -128,6 +134,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	if state == "title" and ((event is InputEventKey and event.pressed and event.keycode in [KEY_ENTER, KEY_SPACE]) or (event is InputEventJoypadButton and event.is_action_pressed("ui_accept"))):
 		show_hub()
 		get_viewport().set_input_as_handled()
+	elif event is InputEventJoypadButton and event.is_action_pressed("ui_accept"):
+		# A menu can temporarily lose focus when its controls are rebuilt.
+		if ui.overlay.visible and get_viewport().gui_get_focus_owner() == null:
+			ui._focus_current()
+			get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("pause_run"):
 		if state == "playing":
 			pause_run()
