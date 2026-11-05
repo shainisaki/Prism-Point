@@ -83,6 +83,24 @@ func run() -> void:
 	root.content_scale_size = Vector2i.ZERO
 	root.size = Vector2i(800, 600)
 	await capture("combined-ui-compact")
+	root.size = Vector2i(1280, 800)
+	game.start_run()
+	game.arena.objects.clear()
+	game.arena.enemies.clear()
+	game.arena.pickups.clear()
+	game.arena.monument_walls.clear()
+	game.arena.walls.assign([Rect2(0, 0, game.arena.SIZE.x, 28)])
+	var center = game.arena.SIZE / 2
+	game.arena.player = center + Vector2(-200, 60)
+	game.arena.camera.position = center
+	game.arena.objects.append({"kind": "monument", "p": center, "r": 35.0, "activated": [0, 1, 2], "used": false})
+	game.arena.objects.append({"kind": "crystal", "p": center + Vector2(250, 50), "r": 20.0, "hp": 20.0})
+	game.arena.reset_discovery()
+	game.arena.camera.force_update_scroll()
+	game.arena.reveal_view()
+	game.ui.toast_label.hide()
+	game.elapsed = 1.4
+	await capture("rune-monument-crystal")
 	game.queue_free()
 	await process_frame
 	DirAccess.remove_absolute("user://render_test.json")

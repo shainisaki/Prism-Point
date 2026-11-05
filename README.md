@@ -7,6 +7,8 @@ AStarGrid2D. Es benötigt **keinen Browser, kein HTML und keinen Webserver**.
 Die neue Kombination aus minimalistischer UI und taktischer Farbwelt ist im
 [UI-Update mit Bildern](docs/UI_UPDATE.md) zu sehen. Die vorherigen Änderungen
 stehen im [Gameplay-Update](docs/GAMEPLAY_UPDATE.md).
+Die größere Arena, Kristallfundorte, Runenmonumente und Feuerschalen-Entwürfe
+stehen im [Welt-Update](docs/WORLD_UPDATE.md).
 
 ## Öffnen und spielen
 
@@ -47,18 +49,19 @@ keinen blauen Waffen-/Richtungsstrich mehr.
 
 ## Übertragene Inhalte
 
-- Titelgrafiken, Kristallgrafik und alle drei Musikstücke aus dem Original;
+- Titelgrafiken und alle drei Musikstücke aus dem Original, überarbeiteter Kristallsprite;
   keine externen Downloads während des Spiels.
 - Standard, Runner, Bomber, Tank und Sniper mit Kosten, Startwerten,
   Granaten, Tempo-Schaden, Durchdringen/Abprallen und Combo-Freischaltung.
 - Survival, Endless, Boss Rush, Hardcore und zehnminütiger Time Attack.
-- Prozedurale 4800×3600-Arena, Kollisionen, A*-Navigation, Shop-Pfad, Minikarte,
+- Prozedurale 6000×4500-Arena, Kollisionen, A*-Navigation, Shop-Pfad, Minikarte,
   Spawn-Warnungen, sechs reguläre Gegnerarten, Splitter und Beute-Gegner.
 - Wellen-Skalierung, acht Upgrades, Build-Rabatte, Punkte, Gold, Combos,
   Magnetismus, Rüstung/Dornen, Mehrfachschuss und Dash.
 - Vier Boss-Arten mit Phasen, Lasern, Drohnen, geteiltem Leben und
   Hexagon-Duplikaten; Welle 20 mit sechs Endboss-Knoten und Kern.
-- Kisten, explosive Fässer, Kristalle, Satelliten-Monument, Altes Monument mit
+- Kisten, explosive Fässer, zufällig verteilte Kristalle mit Bodenschatten,
+  Runenmonument mit sechs Aktivierungssteinen, Altes Monument mit
   drei Offenbarungen, versteckter Shop-Schalter und sieben Wellen-Events.
 - Großes Dreiecksmonument mit kollidierenden Steinwänden, drei Eingängen und
   grünen Flammen; zum Aktivieren innen auf dem zentralen Feld stehen bleiben.
@@ -91,7 +94,7 @@ python3 tests/run.py
 ```
 
 Der Runner importiert Assets und führt echte GDScript-Integrationstests aus.
-Die Tests umfassen 52 Basis-Checks sowie 49 Regressionen für HUD-Layout, Monument,
+Die Tests umfassen 52 Basis-Checks sowie 59 Regressionen für HUD-Layout, Monument,
 Kartenaufdeckung, Nebel, HP-Verlauf, Herzen, Combo-Anzeigen und neue Layouts.
 Er prüft zusätzlich Engine-/Scriptfehler, weil Godot bei manchen Laufzeitfehlern
 trotzdem Exitcode 0 liefert. Es gibt keine npm-/Python-Paketabhängigkeiten.
@@ -126,5 +129,5 @@ im Godot-Editor spielen.
   Nachverfolgung; von Godot ignoriert und aus Exporten ausgeschlossen.
 
 Die früheren leeren bzw. `PLACEHOLDER`-Dateien wurden durch dieses Projekt
-ersetzt. Die historischen Assets stammen unverändert aus dem Repository;
-durch die Migration werden keine zusätzlichen Nutzungsrechte eingeräumt.
+ersetzt. Die historischen Inhalte stammen aus dem Repository; der Kristallsprite wurde überarbeitet.
+Durch die Migration werden keine zusätzlichen Nutzungsrechte eingeräumt.

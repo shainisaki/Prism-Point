@@ -9,18 +9,18 @@ const POOLS = {
 	"pillars": ["pillars", "cross", "L", "parallel"],
 }
 
-static func generate(previous: String) -> Dictionary:
+static func generate(previous: String, world_size: Vector2) -> Dictionary:
 	var choices = THEMES.duplicate()
 	choices.erase(previous)
 	var theme: String = choices.pick_random()
-	var walls: Array[Rect2] = [Rect2(0, 0, 4800, 28), Rect2(0, 3572, 4800, 28), Rect2(0, 0, 28, 3600), Rect2(4772, 0, 28, 3600)]
+	var walls: Array[Rect2] = [Rect2(0, 0, world_size.x, 28), Rect2(0, world_size.y - 28, world_size.x, 28), Rect2(0, 0, 28, world_size.y), Rect2(world_size.x - 28, 0, 28, world_size.y)]
 	var footprints: Array[Rect2] = []
 	var kinds: Array[String] = []
-	var count = randi_range(18, 26)
+	var count = int(round(randi_range(18, 26) * world_size.x * world_size.y / (4800.0 * 3600.0)))
 	for attempt in 350:
 		if footprints.size() >= count:
 			break
-		var center = Vector2(randf_range(380, 4420), randf_range(380, 3220))
+		var center = Vector2(randf_range(380, world_size.x - 380), randf_range(380, world_size.y - 380))
 		var span = randf_range(210, 420)
 		var footprint = Rect2(center - Vector2.ONE * (span * 0.7 + 90), Vector2.ONE * (span * 1.4 + 180))
 		var overlaps = false

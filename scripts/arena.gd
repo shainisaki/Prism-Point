@@ -1,7 +1,7 @@
 extends Node2D
 ## Native world simulation and vector rendering. All movement uses seconds.
 
-const SIZE = Vector2(4800, 3600)
+const SIZE = Vector2(6000, 4500)
 const Layout = preload("res://scripts/arena_layout.gd")
 const HEART_DROP_CHANCE = 0.08
 const MONUMENT_RADIUS = 360.0
@@ -64,6 +64,7 @@ func _ready() -> void:
 	floor_surface.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var surface_material = ShaderMaterial.new()
 	surface_material.shader = preload("res://shaders/stone_floor.gdshader")
+	surface_material.set_shader_parameter("world_size", SIZE)
 	floor_surface.material = surface_material
 	add_child(floor_surface)
 	camera = Camera2D.new()
@@ -120,20 +121,20 @@ func generate_wave() -> void:
 	laser_event_cd = 3.0
 	dash_cd = 0.0
 	dash_left = 0.0
-	var layout = Layout.generate(layout_theme)
+	var layout = Layout.generate(layout_theme, SIZE)
 	layout_theme = layout.theme
 	walls.assign(layout.walls)
 	structure_kinds.assign(layout.structures)
 	if not game.boss_wave:
 		place_old_monument()
-	grid.region = Rect2i(0, 0, 96, 72)
 	grid.cell_size = Vector2(50, 50)
+	grid.region = Rect2i(Vector2i.ZERO, Vector2i((SIZE / grid.cell_size).ceil()))
 	grid.offset = Vector2(25, 25)
 	grid.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
 	grid.update()
 	var open_cells: Array[Vector2i] = []
-	for y in 72:
-		for x in 96:
+	for y in grid.region.size.y:
+		for x in grid.region.size.x:
 			var cell = Vector2i(x, y)
 			grid.set_point_solid(cell, blocked(grid.get_point_position(cell), 57.0))
 			if not grid.is_point_solid(cell):
@@ -172,8 +173,7 @@ func generate_wave() -> void:
 		for i in 7:
 			hazards.append(Rect2(random_open(300) - Vector2(36, 36), Vector2(72, 72)))
 		if randf() < 0.7:
-			var near = grid.get_point_position(closest_cell(goal + Vector2(200, 0)))
-			objects.append({"kind": "crystal", "p": near, "r": 20.0, "hp": 20.0})
+			place_crystal()
 		if randf() < 0.7:
 			var p = random_open(400)
 			# Satellites must also be reachable and unobstructed.
@@ -196,6 +196,28 @@ func generate_wave() -> void:
 	camera.reset_smoothing()
 	camera.force_update_scroll()
 	reveal_view()
+
+func place_crystal() -> bool:
+	for attempt in 100:
+		var p = random_open(250)
+		if p.distance_to(goal) < 500 or blocked(p, 35):
+			continue
+		var occupied = false
+		for object in objects:
+			if p.distance_to(object.p) < float(object.r) + 45:
+				occupied = true
+				break
+		if not occupied:
+			objects.append({"kind": "crystal", "p": p, "r": 20.0, "hp": 20.0})
+			return true
+	return false
+
+func known_landmarks() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for object in objects:
+		if object.kind in ["old", "monument"] and is_discovered(object.p):
+			result.append({"kind": object.kind, "p": object.p, "used": object.used})
+	return result
 
 func place_old_monument() -> void:
 	var center = Vector2(randf_range(650, SIZE.x - 650), randf_range(650, SIZE.y - 650))
@@ -432,7 +454,7 @@ func spawn_boss(kind: String = "", elite: bool = false) -> void:
 		health *= 0.4
 	var center = random_open(400)
 	if kind == "endboss":
-		center = Vector2(2450, 1850)
+		center = (SIZE / 2).snapped(Vector2(50, 50)) + Vector2(25, 25)
 		for i in range(walls.size() - 1, -1, -1):
 			if walls[i].get_center().distance_to(center) < 450:
 				walls.remove_at(i)
@@ -449,7 +471,7 @@ func spawn_boss(kind: String = "", elite: bool = false) -> void:
 		var shared = {"hp": health, "max_hp": health}
 		boss.shared = shared
 		for i in 4:
-			var clone = boss_dictionary(kind, Vector2(220, 600 + i * 700), 110, health, colors[kind], elite)
+			var clone = boss_dictionary(kind, Vector2(220, SIZE.y * (i + 1) / 5.0), 110, health, colors[kind], elite)
 			clone.shared = shared
 			clone.velocity = Vector2(randf_range(270, 330), 0)
 			enemies.append(clone)
@@ -930,14 +952,9 @@ func draw_object(object: Dictionary) -> void:
 			draw_arc(p, 24, 0, TAU, 24, Color("959ba4"), 3)
 			draw_line(p - Vector2(18, 8), p + Vector2(18, -8), Color("d9a35a"), 3)
 		"crystal":
-			glow(p, 14, Color("48cfea"))
-			draw_texture_rect(crystal_texture, Rect2(p - Vector2(28, 36), Vector2(56, 72)), false)
+			draw_floating_crystal(p)
 		"monument":
-			draw_arc(p, 135, 0, TAU, 60, Color("594c28"), 1.5, true)
-			for i in 6:
-				var satellite = p + Vector2.from_angle(TAU * i / 6) * 135
-				glow(satellite, 16, Color("ffd24a") if object.activated.has(i) else Color("5c5235"))
-			draw_colored_polygon(polygon(p, 36, 6, -PI / 2), Color("ffd24a") if object.used else Color("7e6b39"))
+			draw_runestone_monument(object)
 		"old":
 			var vertices = polygon(p, object.get("radius", MONUMENT_RADIUS), 3, -PI / 2)
 			for i in 3:
@@ -965,6 +982,57 @@ func draw_flame(p: Vector2, amount: float, phase: float) -> void:
 	var inner = PackedVector2Array([p + Vector2(-10, -2), p + Vector2(-8, -height * 0.3), p + Vector2(sway * 0.4, -height * 0.72), p + Vector2(10, -height * 0.25), p + Vector2(9, -2)])
 	draw_colored_polygon(inner, Color("77ff9b"))
 	draw_colored_polygon(PackedVector2Array([p + Vector2(-5, -2), p + Vector2(0, -height * 0.4), p + Vector2(5, -2)]), Color("ceffe0"))
+
+func draw_ground_shadow(p: Vector2, width: float, depth: float) -> void:
+	for i in 3:
+		var points = PackedVector2Array()
+		var spread = 1.0 + i * 0.22
+		for j in 40:
+			var a = TAU * j / 40
+			points.append(p + Vector2(cos(a) * width, sin(a) * depth) * spread)
+		draw_colored_polygon(points, Color(0, 0, 0, 0.13 - i * 0.035))
+
+func draw_floating_crystal(p: Vector2) -> void:
+	var bob = sin(game.elapsed * 2.4 + p.x * 0.01) * 4
+	draw_ground_shadow(p + Vector2(4, 22), 20 - bob * 0.3, 7)
+	# Render only the gem's six-sided silhouette. No pedestal, halo or backdrop
+	# from the source illustration is sampled outside this textured mesh.
+	var points = PackedVector2Array([Vector2(0, -58), Vector2(14, -35), Vector2(14, -5), Vector2(0, 10), Vector2(-14, -5), Vector2(-14, -35)])
+	for i in points.size():
+		points[i] += p - Vector2(0, bob)
+	var uv = PackedVector2Array([Vector2(0.5, 0.058), Vector2(0.772, 0.344), Vector2(0.772, 0.645), Vector2(0.5, 0.914), Vector2(0.228, 0.645), Vector2(0.228, 0.344)])
+	draw_polygon(points, PackedColorArray([Color.WHITE]), uv, crystal_texture)
+
+func draw_runestone_monument(object: Dictionary) -> void:
+	var p = object.p
+	var ink = Color("f1c66b") if object.used else Color("947c50")
+	# Six walk-over rune stones still power the central obelisk, one at a time.
+	draw_ground_shadow(p + Vector2(7, 16), 52, 16)
+	draw_circle(p, 44, Color("28353a"))
+	draw_arc(p, 44, 0, TAU, 48, Color("617174"), 3, true)
+	for i in 6:
+		var a = TAU * i / 6
+		var satellite = p + Vector2.from_angle(a) * 135
+		var active = object.activated.has(i)
+		var rune_color = Color("ffdd83") if active else Color("796e55")
+		draw_line(p + Vector2.from_angle(a) * 46, satellite, Color(rune_color, 0.34 if active else 0.12), 2, true)
+		draw_ground_shadow(satellite + Vector2(4, 12), 23, 9)
+		var stone = PackedVector2Array([satellite + Vector2(-20, 8), satellite + Vector2(-18, -16), satellite + Vector2(-8, -23), satellite + Vector2(17, -19), satellite + Vector2(21, 7), satellite + Vector2(10, 14)])
+		draw_colored_polygon(stone, Color("394a4d"))
+		stone.append(stone[0])
+		draw_polyline(stone, Color("758380"), 2, true)
+		draw_line(satellite + Vector2(-11, 8), satellite + Vector2(-11, -15), Color("1d2b30"), 3)
+		draw_line(satellite + Vector2(0, -12), satellite + Vector2(0, 7), rune_color, 3, true)
+		draw_line(satellite + Vector2(-7, -6), satellite + Vector2(7, -6), rune_color, 2, true)
+		if active:
+			draw_circle(satellite + Vector2(0, -6), 12, Color(1, 0.76, 0.3, 0.07))
+	# An asymmetric carved obelisk, with differently lit stone faces and a cap.
+	draw_colored_polygon(PackedVector2Array([p + Vector2(-20, 13), p + Vector2(-17, -45), p + Vector2(-4, -65), p + Vector2(15, -47), p + Vector2(22, 12), p + Vector2(0, 24)]), Color("526466"))
+	draw_colored_polygon(PackedVector2Array([p + Vector2(-4, -65), p + Vector2(-1, 15), p + Vector2(0, 24), p + Vector2(22, 12), p + Vector2(15, -47)]), Color("2c3b40"))
+	draw_line(p + Vector2(-17, -43), p + Vector2(-19, 9), Color("94a5a0"), 2, true)
+	draw_line(p + Vector2(-4, -38), p + Vector2(-4, 4), ink, 3, true)
+	for y in [-29, -15, -2]:
+		draw_line(p + Vector2(-11, y), p + Vector2(6, y - 5), ink, 2, true)
 
 func draw_heart(p: Vector2) -> void:
 	var points = PackedVector2Array()

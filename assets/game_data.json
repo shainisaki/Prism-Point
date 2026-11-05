@@ -278,7 +278,7 @@
       "name": "Kristall",
       "color": "#2ee0ff",
       "icon": "◆",
-      "desc": "20 HP, nahe Shop. Zerstören: +150 Punkte, Ressourcen ×3 für die Welle."
+      "desc": "Schwebt an freien Stellen auf der Karte. 20 HP; zerstören: +150 Punkte, Ressourcen ×3 für die Welle."
     },
     {
       "name": "Metallfass",
@@ -290,7 +290,7 @@
       "name": "Monument",
       "color": "#ffd700",
       "icon": "✦",
-      "desc": "Satelliten aktivieren → zufälliger Stat-Bonus."
+      "desc": "Sechs Runensteine durch Darüberlaufen aktivieren → zufälliger Stat-Bonus. Entdeckte Monumente erscheinen auf der Minikarte."
     },
     {
       "name": "Altes Monument",

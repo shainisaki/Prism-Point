@@ -27,6 +27,9 @@ func run() -> void:
 	await process_frame
 	game.start_run()
 	var arena = game.arena
+	expect(arena.SIZE == Vector2(6000, 4500) and arena.grid.region.size == Vector2i(120, 90), "Expanded arena uses matching world and navigation bounds")
+	expect(arena.camera.limit_right == 6000 and arena.camera.limit_bottom == 4500 and arena.floor_surface.size == arena.SIZE, "Camera and floor cover the complete expanded arena")
+	expect(arena.discovery.get_size() == Vector2i(600, 450), "Exploration mask scales with the larger map")
 	await process_frame
 	await process_frame
 	expect(game.ui.health_plate.get_parent() == game.ui.hud_bar and game.ui.wave_plate.get_parent() == game.ui.hud_bar, "Health and wave use independent floating HUD modules")
@@ -113,6 +116,46 @@ func run() -> void:
 	var hud_labels = ""
 	for label in game.ui.hud.find_children("*", "Label", true, false): hud_labels += label.text
 	expect(not "COMBO" in hud_labels and not "TEMPO" in hud_labels and not "SCHADEN" in hud_labels, "No fixed combo or passive stat row remains in the gameplay HUD")
+	arena.objects.clear()
+	arena.pickups.clear()
+	var positions: Array[Vector2] = []
+	var valid_crystals = true
+	for i in 20:
+		if not arena.place_crystal():
+			valid_crystals = false
+			continue
+		var crystal = arena.objects[-1]
+		positions.append(crystal.p)
+		valid_crystals = valid_crystals and crystal.p.distance_to(arena.goal) >= 500 and not arena.blocked(crystal.p, 35)
+	expect(valid_crystals and positions.size() == 20, "Crystals spawn at free world positions away from the shop")
+	var spread = 0.0
+	for p in positions: spread = maxf(spread, p.distance_to(positions[0]))
+	expect(spread > 1000, "Crystal locations are distributed across the arena")
+	arena.objects.clear()
+	arena.reset_discovery()
+	var landmark_p = Vector2(2000, 2000)
+	var rune_monument = {"kind": "monument", "p": landmark_p, "r": 35.0, "activated": [], "used": false}
+	arena.objects.append(rune_monument)
+	arena.objects.append({"kind": "old", "p": landmark_p + Vector2(250, 0), "r": 95.0, "charge": 0.0, "used": false})
+	expect(arena.known_landmarks().is_empty(), "Unexplored monuments do not reveal hidden map regions")
+	arena.player = landmark_p
+	arena.camera.position = landmark_p
+	arena.camera.force_update_scroll()
+	arena.reveal_view()
+	expect(arena.known_landmarks().size() == 2, "Both monument types receive markers after discovery")
+	var points_before_monument = game.points
+	var stats_before = game.stats.duplicate()
+	for i in 5:
+		arena.player = landmark_p + Vector2.from_angle(TAU * i / 6) * 135
+		arena.update_objects(0.01)
+	expect(rune_monument.activated.size() == 5 and not rune_monument.used, "Rune monument requires all six walk-over stones")
+	arena.player = landmark_p + Vector2.from_angle(TAU * 5 / 6) * 135
+	arena.update_objects(0.01)
+	expect(rune_monument.used and game.stats != stats_before and game.points == points_before_monument, "Sixth rune stone activates the original stat-bonus reward")
+	var active_marker = false
+	for marker in arena.known_landmarks():
+		if marker.kind == "monument": active_marker = marker.used
+	expect(active_marker, "Minimap marker reflects completed monument activation")
 
 	game.start_run()
 	arena.objects.clear()
@@ -160,7 +203,7 @@ func run() -> void:
 	game.start_run()
 	arena.enemies.clear()
 	arena.monument_walls.clear()
-	arena.walls.assign([Rect2(0, 0, 4800, 28), Rect2(0, 3572, 4800, 28), Rect2(0, 0, 28, 3600), Rect2(4772, 0, 28, 3600)])
+	arena.walls.assign([Rect2(0, 0, arena.SIZE.x, 28), Rect2(0, arena.SIZE.y - 28, arena.SIZE.x, 28), Rect2(0, 0, 28, arena.SIZE.y), Rect2(arena.SIZE.x - 28, 0, 28, arena.SIZE.y)])
 	arena.spawn_boss("cylinder")
 	var barrel = arena.enemies[0]
 	barrel.p = Vector2(1000, 1000)

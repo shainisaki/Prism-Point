@@ -22,5 +22,19 @@ func _draw() -> void:
 	draw_circle(arena.goal * scale_xy, 3, Color("5dffc0") if arena.game.goal_unlocked else Color("6b829a"))
 	# The same world-to-map transform and visibility mask apply to every feature.
 	draw_texture_rect(arena.discovery_texture, Rect2(Vector2.ZERO, size), false)
+	for landmark in arena.known_landmarks():
+		var p = landmark.p * scale_xy
+		var color = Color("68e6a0") if landmark.kind == "old" else Color("f2c867")
+		if landmark.used:
+			color = color.darkened(0.35)
+		var sides = 3 if landmark.kind == "old" else 6
+		var points = PackedVector2Array()
+		for i in sides:
+			points.append(p + Vector2.from_angle(TAU * i / sides - PI / 2) * 5)
+		draw_circle(p, 7, Color(0.015, 0.025, 0.035, 0.95))
+		points.append(points[0])
+		draw_polyline(points, color, 1.5, true)
+		if landmark.used:
+			draw_circle(p, 1.5, color)
 	draw_circle(arena.player * scale_xy, 3.5, Color.WHITE)
 	draw_rect(Rect2(Vector2.ZERO, size), Color("36495e"), false, 1)

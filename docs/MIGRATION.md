@@ -50,13 +50,13 @@ Pause, Timer, Shop, Upgrades, Wellenwechsel, Unverwundbarkeit, Hardcore,
 Boss Rush, alle Boss-Arten, Gold, Freischaltungen, Spielstand-Roundtrip,
 Time Attack, Optionen, Kompendium und Simulation der Wellen 6/10/20/25.
 Laufzeitdiagnosen werden zusätzlich zum Exitcode ausgewertet.
-Die 52 Basis-Checks werden durch `tests/feedback.gd` um 49 Regressionen
+Die 52 Basis-Checks werden durch `tests/feedback.gd` um 59 Regressionen
 erweitert: Monument-Wände und Eingänge auch für den Tank, Aktivierung von innen,
 Sichtbereichsaufdeckung und Erinnern/Zurücksetzen der Minikarte, versteckte
 Nebel-HUDs und nutzbare Pause, ausschließlich dort angezeigte Statuswerte,
 nummerierte Combo-Popups, Herzen und HP-Übernahme, Rollanimation,
 2000/240 Endboss-HP sowie acht unterschiedliche, begehbare Kartenlayouts.
-Aktuelles Gesamtergebnis mit Godot 4.6.3: 101 Checks bestanden, keine
+Aktuelles Gesamtergebnis mit Godot 4.6.3: 111 Checks bestanden, keine
 Engine-/Scriptfehler. Bilder und Änderungen: [Gameplay-Update](GAMEPLAY_UPDATE.md).
 Die neue UI-Kombination und kleine Fenstergrößen: [UI-Update](UI_UPDATE.md).
 

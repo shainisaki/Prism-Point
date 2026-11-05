@@ -1,7 +1,7 @@
 shader_type canvas_item;
 render_mode unshaded;
 
-uniform vec2 world_size = vec2(4800.0, 3600.0);
+uniform vec2 world_size = vec2(6000.0, 4500.0);
 
 float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -17,11 +17,11 @@ float noise(vec2 p) {
 
 void fragment() {
 	vec2 world = UV * world_size;
-	float row = floor(world.y / 192.0);
-	vec2 masonry = vec2(world.x + mod(row, 2.0) * 128.0, world.y) / vec2(256.0, 192.0);
+	float row = floor(world.y / 96.0);
+	vec2 masonry = vec2(world.x + mod(row, 2.0) * 64.0, world.y) / vec2(128.0, 96.0);
 	vec2 tile = floor(masonry);
-	vec2 local = fract(masonry) * vec2(256.0, 192.0);
-	vec2 edge = min(local, vec2(256.0, 192.0) - local);
+	vec2 local = fract(masonry) * vec2(128.0, 96.0);
+	vec2 edge = min(local, vec2(128.0, 96.0) - local);
 	float joint = 1.0 - smoothstep(0.7, 2.5, min(edge.x, edge.y));
 	float variation = hash(tile) - 0.5;
 	float mineral = noise(world * 0.024) * 0.65 + noise(world * 0.085) * 0.35;
