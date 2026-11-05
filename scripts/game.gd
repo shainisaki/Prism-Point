@@ -66,6 +66,8 @@ func _ready() -> void:
 	apply_preferences()
 	ui.title_screen()
 
+const ALL_JOYPADS := -1 # InputMap wildcard for controller device IDs.
+
 func _setup_input() -> void:
 	var bindings = {"move_up": [KEY_W, KEY_UP], "move_down": [KEY_S, KEY_DOWN], "move_left": [KEY_A, KEY_LEFT], "move_right": [KEY_D, KEY_RIGHT], "pause_run": [KEY_P, KEY_ESCAPE], "dash": [KEY_SHIFT]}
 	for action in bindings:
@@ -78,15 +80,18 @@ func _setup_input() -> void:
 			InputMap.action_add_event(action, event)
 	for entry in [["move_left", JOY_AXIS_LEFT_X, -1.0], ["move_right", JOY_AXIS_LEFT_X, 1.0], ["move_up", JOY_AXIS_LEFT_Y, -1.0], ["move_down", JOY_AXIS_LEFT_Y, 1.0]]:
 		var motion = InputEventJoypadMotion.new()
+		motion.device = ALL_JOYPADS
 		motion.axis = entry[1]
 		motion.axis_value = entry[2]
 		InputMap.action_add_event(entry[0], motion)
 	for entry in [["pause_run", JOY_BUTTON_START], ["dash", JOY_BUTTON_X]]:
 		var button = InputEventJoypadButton.new()
+		button.device = ALL_JOYPADS
 		button.button_index = entry[1]
 		InputMap.action_add_event(entry[0], button)
 	for entry in [["move_up", JOY_BUTTON_DPAD_UP], ["move_down", JOY_BUTTON_DPAD_DOWN], ["move_left", JOY_BUTTON_DPAD_LEFT], ["move_right", JOY_BUTTON_DPAD_RIGHT]]:
 		var button = InputEventJoypadButton.new()
+		button.device = ALL_JOYPADS
 		button.button_index = entry[1]
 		InputMap.action_add_event(entry[0], button)
 	for action in store.data.settings.get("keys", {}):
@@ -120,7 +125,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if message != "": ui.toast(message, true)
 		get_viewport().set_input_as_handled()
 		return
-	if state == "title" and ((event is InputEventKey and event.pressed and event.keycode in [KEY_ENTER, KEY_SPACE]) or (event is InputEventJoypadButton and event.pressed)):
+	if state == "title" and ((event is InputEventKey and event.pressed and event.keycode in [KEY_ENTER, KEY_SPACE]) or (event is InputEventJoypadButton and event.is_action_pressed("ui_accept"))):
 		show_hub()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("pause_run"):
