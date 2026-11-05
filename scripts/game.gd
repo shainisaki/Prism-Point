@@ -339,7 +339,7 @@ func buy_upgrade(key: String) -> bool:
 		hp = mini(max_hp, hp + 1 + (1 if focus == "defense" else 0))
 	if not test_mode:
 		audio.effect("collect")
-	ui.shop_screen()
+	ui.shop_screen(key)
 	return true
 
 func recalculate_health() -> void:
