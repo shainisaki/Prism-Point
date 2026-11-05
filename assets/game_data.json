@@ -1,0 +1,346 @@
+{
+  "characters": {
+    "unknown": {
+      "id": "unknown",
+      "name": "Standard",
+      "icon": "○",
+      "color": "#ffffff",
+      "tag": "Ausgewogen",
+      "cost": 0,
+      "hp": 0,
+      "speed": 0,
+      "damage": 0,
+      "resource": 0,
+      "armor": 0,
+      "magnet": 0,
+      "range": 0,
+      "attack": 0,
+      "radius": 14,
+      "shopDiscount": {}
+    },
+    "runner": {
+      "id": "runner",
+      "name": "Runner",
+      "icon": "⚡",
+      "color": "#ffd24a",
+      "tag": "Gold · Tempo = Schaden",
+      "cost": 15,
+      "hp": -3,
+      "speed": 10,
+      "damage": -5,
+      "resource": 0,
+      "armor": -2,
+      "magnet": 10,
+      "range": 3,
+      "attack": 5,
+      "radius": 14,
+      "shopDiscount": {
+        "speed": 0.9,
+        "damage": 1.25
+      },
+      "passive": "speedDamage"
+    },
+    "bomber": {
+      "id": "bomber",
+      "name": "Bomber",
+      "icon": "💣",
+      "color": "#8B4513",
+      "tag": "Granaten · robust",
+      "cost": 20,
+      "hp": 2,
+      "speed": 0,
+      "damage": 5,
+      "resource": 5,
+      "armor": 5,
+      "magnet": 0,
+      "range": 10,
+      "attack": -3,
+      "radius": 14,
+      "shopDiscount": {},
+      "passive": "grenades"
+    },
+    "tank": {
+      "id": "tank",
+      "name": "Tank",
+      "icon": "⬡",
+      "color": "#aaaaaa",
+      "tag": "Riesig · Nur Granaten",
+      "cost": 18,
+      "hp": 15,
+      "speed": 0,
+      "damage": 25,
+      "resource": -0.75,
+      "armor": 25,
+      "magnet": 25,
+      "range": 0,
+      "attack": 0,
+      "radius": 45,
+      "shopDiscount": {
+        "armor": 0.8,
+        "vitality": 0.8,
+        "damage": 1.4
+      },
+      "passive": "grenades"
+    },
+    "sniper": {
+      "id": "sniper",
+      "name": "Sniper",
+      "icon": "◎",
+      "color": "#111111",
+      "tag": "Combo 1000 · Pierce+Bounce",
+      "cost": 0,
+      "hp": 0,
+      "speed": 0,
+      "damage": 10,
+      "resource": 0,
+      "armor": 0,
+      "magnet": 10,
+      "range": 10,
+      "attack": -10,
+      "radius": 14,
+      "shopDiscount": {},
+      "passive": "sniper",
+      "unlockCombo": 1000
+    }
+  },
+  "modes": {
+    "survival": {
+      "id": "survival",
+      "name": "Survival",
+      "tag": "Klassische Wellen + Shop",
+      "icon": "▶"
+    },
+    "endless": {
+      "id": "endless",
+      "name": "Endless",
+      "tag": "Unendliche Wellen",
+      "icon": "∞"
+    },
+    "bossrush": {
+      "id": "bossrush",
+      "name": "Boss Rush",
+      "tag": "Nur Bosse · ∞ Reichweite",
+      "icon": "☠"
+    },
+    "hardcore": {
+      "id": "hardcore",
+      "name": "Hardcore",
+      "tag": "Nur 1 Leben",
+      "icon": "♥"
+    },
+    "timeattack": {
+      "id": "timeattack",
+      "name": "Time Attack",
+      "tag": "10 Min. – max. Wellen",
+      "icon": "⏱"
+    }
+  },
+  "passive_meta": {
+    "vitality": {
+      "name": "Vitalität",
+      "symbol": "❤",
+      "color": "#ff6b8a",
+      "bg": "#3a1520",
+      "desc": "+1 max. Leben",
+      "basePrice": 4
+    },
+    "speed": {
+      "name": "Geschwindigkeit",
+      "symbol": "⚡",
+      "color": "#c070ff",
+      "bg": "#2a1a3a",
+      "desc": "Schneller laufen",
+      "basePrice": 3
+    },
+    "magnet": {
+      "name": "Magnetismus",
+      "symbol": "⊕",
+      "color": "#5eb8ff",
+      "bg": "#0f2a3a",
+      "desc": "Größerer Sammelradius",
+      "basePrice": 3
+    },
+    "armor": {
+      "name": "Rüstung",
+      "symbol": "⬡",
+      "color": "#bbbbbb",
+      "bg": "#2a2a2a",
+      "desc": "Blockchance + Dornenschaden",
+      "basePrice": 5
+    },
+    "resource": {
+      "name": "Ressourcenbonus",
+      "symbol": "◆",
+      "color": "#7dffb0",
+      "bg": "#1a2a1a",
+      "desc": "Mehr Punkte + ab 500 Pkt. %Schaden",
+      "basePrice": 5
+    },
+    "damage": {
+      "name": "Schaden",
+      "symbol": "⚔",
+      "color": "#ffd24a",
+      "bg": "#3a2010",
+      "desc": "Mehr Schaden (abnehmend)",
+      "basePrice": 5
+    },
+    "range": {
+      "name": "Reichweite",
+      "symbol": "◎",
+      "color": "#8ec8ff",
+      "bg": "#1a2535",
+      "desc": "+38px Angriffsreichweite",
+      "basePrice": 4
+    },
+    "attack": {
+      "name": "Angriffsgeschwindigkeit",
+      "symbol": "✧",
+      "color": "#ffd24a",
+      "bg": "#3a3010",
+      "desc": "Schneller schießen · ab 10: Mehrfachschuss",
+      "basePrice": 4
+    }
+  },
+  "compendium": [
+    {
+      "name": "Runner",
+      "color": "#ff4444",
+      "icon": "●",
+      "desc": "Läuft direkt auf dich zu und verursacht Kontaktschaden. Schnell, wenig HP."
+    },
+    {
+      "name": "Tank",
+      "color": "#cc2222",
+      "icon": "⬤",
+      "desc": "Langsam, sehr viel HP. Hoher Kontaktschaden."
+    },
+    {
+      "name": "Shooter",
+      "color": "#ffaa44",
+      "icon": "◎",
+      "desc": "Hält Abstand und schießt Projektile auf den Spieler."
+    },
+    {
+      "name": "Dasher",
+      "color": "#111",
+      "icon": "✦",
+      "desc": "Schwarzer Zickzack-Stürmer mit Echo-Trail. Kündigt an und rast zu."
+    },
+    {
+      "name": "Splitter",
+      "color": "#ff66aa",
+      "icon": "◈",
+      "desc": "Zerbricht beim Tod in kleinere Einheiten."
+    },
+    {
+      "name": "Hunter",
+      "color": "#aa44ff",
+      "icon": "◉",
+      "desc": "Versucht dich einzukesseln / zu flankieren."
+    },
+    {
+      "name": "Lootling",
+      "color": "#b8ff3a",
+      "icon": "●",
+      "desc": "Beute-Event. Läuft ziellos – Drop: Stats oder viele Punkte."
+    },
+    {
+      "name": "Boss: Hexagon",
+      "color": "#c070ff",
+      "icon": "⬡",
+      "desc": "Phasen: Unsichtbarkeit, Drohnen-Schwarm, Duplikation."
+    },
+    {
+      "name": "Boss: Dreieck",
+      "color": "#ff6644",
+      "icon": "▲",
+      "desc": "Ninja-Bewegung, stoppt zum Lasern. Abstand halten."
+    },
+    {
+      "name": "Boss: Viereck",
+      "color": "#44aaff",
+      "icon": "■",
+      "desc": "Schnelle Dash-Angriffe auf den Spieler."
+    },
+    {
+      "name": "Boss: Zylinder",
+      "color": "#8B5A2B",
+      "icon": "▮",
+      "desc": "Rollt/hüpft über die Map. Vibration beim Landen."
+    },
+    {
+      "name": "Endboss",
+      "color": "#ffffff",
+      "icon": "✦",
+      "desc": "Welle 20. Sechs Knoten + Kern. Sichel-Geschosse. Stationär."
+    },
+    {
+      "name": "Kristall",
+      "color": "#2ee0ff",
+      "icon": "◆",
+      "desc": "20 HP, nahe Shop. Zerstören: +150 Punkte, Ressourcen ×3 für die Welle."
+    },
+    {
+      "name": "Metallfass",
+      "color": "#9a9aa4",
+      "icon": "🛢️",
+      "desc": "Explodiert bei Beschuss. Flächenschaden an Gegnern und Spieler."
+    },
+    {
+      "name": "Monument",
+      "color": "#ffd700",
+      "icon": "✦",
+      "desc": "Satelliten aktivieren → zufälliger Stat-Bonus."
+    },
+    {
+      "name": "Altes Monument",
+      "color": "#6a6a6a",
+      "icon": "☠",
+      "desc": "Im Zentrum stehen, Flammen entzünden → riskante Wahl (positiv/negativ)."
+    }
+  ],
+  "wave_modifiers": [
+    {
+      "id": "haste",
+      "name": "TEMPO",
+      "desc": "Gegner schneller",
+      "banner": "⚡ TEMPO – Gegner sind schneller"
+    },
+    {
+      "id": "swarm",
+      "name": "SCHWARM",
+      "desc": "Runner-Welle",
+      "banner": "🐝 SCHWARM – Runner-Flut"
+    },
+    {
+      "id": "elite",
+      "name": "ELITE",
+      "desc": "Elite-Boss",
+      "banner": "💀 ELITE – Abgeschwächter Boss"
+    },
+    {
+      "id": "rich",
+      "name": "BEUTE",
+      "desc": "Beute-Mobs",
+      "banner": "💎 BEUTE – Limetten-Jagd"
+    },
+    {
+      "id": "laser",
+      "name": "VORBOTE",
+      "desc": "Mehr Laser",
+      "banner": "🔺 VORBOTE – Laser-Hagel"
+    },
+    {
+      "id": "dash",
+      "name": "ANSTURM",
+      "desc": "Mehr Dasher",
+      "banner": "💥 ANSTURM – Dasher überall"
+    },
+    {
+      "id": "fog",
+      "name": "NEBEL",
+      "desc": "Weniger Sicht",
+      "banner": "🌫 NEBEL – Halte dich am Pfad"
+    }
+  ]
+}
