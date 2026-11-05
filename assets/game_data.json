@@ -287,16 +287,16 @@
       "desc": "Explodiert bei Beschuss. Flächenschaden an Gegnern und Spieler."
     },
     {
-      "name": "Monument",
-      "color": "#ffd700",
+      "name": "Datenchip",
+      "color": "#54caff",
       "icon": "✦",
-      "desc": "Sechs Runensteine durch Darüberlaufen aktivieren → zufälliger Stat-Bonus. Entdeckte Monumente erscheinen auf der Minikarte."
+      "desc": "Sechs entfernte Felder entschlüsseln. Binärdaten sammeln sich am Chip und geben nach dem Transfer einen Stat-Bonus frei."
     },
     {
-      "name": "Altes Monument",
-      "color": "#6a6a6a",
+      "name": "Schaltmodul",
+      "color": "#54caff",
       "icon": "☠",
-      "desc": "Im Zentrum stehen, Flammen entzünden → riskante Wahl (positiv/negativ)."
+      "desc": "Auf der Druckplatte stehen bleiben: Drei Leitungen laden sich auf, Glühbirnen leuchten blau und eine Systemmodifikation wird freigeschaltet."
     }
   ],
   "wave_modifiers": [

@@ -41,7 +41,8 @@ func run() -> void:
 	for object in game.arena.objects:
 		if object.kind == "old":
 			object.charge = 1.6
-			game.arena.player = object.p + Vector2(0, 120)
+			object.pressed = true
+			game.arena.player = object.p
 			game.arena.camera.position = object.p + Vector2(0, -60)
 	game.elapsed = 2.3
 	game.arena.camera.force_update_scroll()
@@ -93,14 +94,25 @@ func run() -> void:
 	var center = game.arena.SIZE / 2
 	game.arena.player = center + Vector2(-200, 60)
 	game.arena.camera.position = center
-	game.arena.objects.append({"kind": "monument", "p": center, "r": 35.0, "activated": [0, 1, 2], "used": false})
+	var chip = {"kind": "monument", "p": center, "r": 45.0, "activated": [], "used": false}
+	game.arena.objects.append(chip)
 	game.arena.objects.append({"kind": "crystal", "p": center + Vector2(250, 50), "r": 20.0, "hp": 20.0})
 	game.arena.reset_discovery()
 	game.arena.camera.force_update_scroll()
 	game.arena.reveal_view()
 	game.ui.toast_label.hide()
 	game.elapsed = 1.4
+	for i in 5:
+		game.arena.player = game.arena.data_field_position(chip, i)
+		game.arena.update_objects(0.01)
+		for frame in 3: game.arena.update_objects(0.1)
 	await capture("rune-monument-crystal")
+	game.arena.player = game.arena.data_field_position(chip, 5)
+	game.arena.update_objects(0.01)
+	game.arena.update_objects(0.55)
+	await capture("data-transfer")
+	game.arena.update_objects(0.7)
+	await capture("data-decoded")
 	game.queue_free()
 	await process_frame
 	DirAccess.remove_absolute("user://render_test.json")

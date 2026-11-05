@@ -1,13 +1,14 @@
 # PRISM POINT — Godot
 
 Native 2D-Version für **Godot 4.6+**, entwickelt und geprüft mit Godot 4.6.3.
+Aktueller Stand: [Elektronik-Update mit Druckplatte, Datenchip und Schaltkreis-Boden](docs/TECH_UPDATE.md).
 Das Spiel verwendet GDScript, Godot-Controls, Camera2D, AudioStreamPlayer und
 AStarGrid2D. Es benötigt **keinen Browser, kein HTML und keinen Webserver**.
 
 Die neue Kombination aus minimalistischer UI und taktischer Farbwelt ist im
 [UI-Update mit Bildern](docs/UI_UPDATE.md) zu sehen. Die vorherigen Änderungen
 stehen im [Gameplay-Update](docs/GAMEPLAY_UPDATE.md).
-Die größere Arena, Kristallfundorte, Runenmonumente und Feuerschalen-Entwürfe
+Die frühere größere Arena, Kristallfundorte und damaligen Monument-Entwürfe
 stehen im [Welt-Update](docs/WORLD_UPDATE.md).
 
 ## Öffnen und spielen
@@ -61,10 +62,12 @@ keinen blauen Waffen-/Richtungsstrich mehr.
 - Vier Boss-Arten mit Phasen, Lasern, Drohnen, geteiltem Leben und
   Hexagon-Duplikaten; Welle 20 mit sechs Endboss-Knoten und Kern.
 - Kisten, explosive Fässer, zufällig verteilte Kristalle mit Bodenschatten,
-  Runenmonument mit sechs Aktivierungssteinen, Altes Monument mit
-  drei Offenbarungen, versteckter Shop-Schalter und sieben Wellen-Events.
-- Großes Dreiecksmonument mit kollidierenden Steinwänden, drei Eingängen und
-  grünen Flammen; zum Aktivieren innen auf dem zentralen Feld stehen bleiben.
+  Datenchip mit sechs Entschlüsselungsfeldern, Schaltmodul mit
+  drei Systemmodifikationen, versteckter Shop-Schalter und sieben Wellen-Events.
+- Großes Schaltmodul mit Metallrahmen, drei Eingängen, Druckplatte und drei
+  blau leuchtenden Glühbirnen. Die Ladung wächst sichtbar von der Platte zu den Lampen.
+- Datenchip mit sechs entfernten Feldern, weich erscheinenden Binärzahlen und
+  Datentransfer vor der Belohnung; Schaltkreise auf dem Hintergrund **#141414**.
 - Pro Welle neu angeordnete Wände mit neun Strukturen in vier wechselnden
   Layout-Familien; Fassboss mit Holzdauben, Metallreifen und Rollanimation.
   Endboss: 2000 Kern-HP und 240 HP je Knoten (+100% gegenüber der ersten Portierung).
@@ -94,7 +97,7 @@ python3 tests/run.py
 ```
 
 Der Runner importiert Assets und führt echte GDScript-Integrationstests aus.
-Die Tests umfassen 52 Basis-Checks sowie 59 Regressionen für HUD-Layout, Monument,
+Die Tests umfassen 52 Basis-Checks sowie 69 Regressionen für Druckplatte, Datenchip, HUD-Layout, Monument,
 Kartenaufdeckung, Nebel, HP-Verlauf, Herzen, Combo-Anzeigen und neue Layouts.
 Er prüft zusätzlich Engine-/Scriptfehler, weil Godot bei manchen Laufzeitfehlern
 trotzdem Exitcode 0 liefert. Es gibt keine npm-/Python-Paketabhängigkeiten.

@@ -1,5 +1,8 @@
 # Karte, Kristall und Monumente
 
+Historischer Zwischenstand: Die damaligen Stein- und Feuerschalen-Entwürfe wurden
+durch das [aktuelle Elektronik-Update](TECH_UPDATE.md) ersetzt.
+
 ## Bereits im Spiel
 
 - **6000×4500** statt 4800×3600 Weltpixel: +25% Breite und Höhe, rund 56% mehr

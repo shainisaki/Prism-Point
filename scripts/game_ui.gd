@@ -505,7 +505,7 @@ func return_from_options() -> void:
 		game.show_hub()
 
 func monument_screen() -> void:
-	var box = _menu("Altes Monument", "Wähle eine Offenbarung. Nutzen und Risiken gelten für diesen Run.")
+	var box = _menu("Schaltmodul aktiviert", "Wähle eine Systemmodifikation. Nutzen und Risiken gelten für diesen Run.")
 	var outcome = randf()
 	for i in 3:
 		var good = outcome < 0.25 or (outcome < 0.6 and randf() < 0.5)

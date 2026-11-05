@@ -24,13 +24,13 @@ func _draw() -> void:
 	draw_texture_rect(arena.discovery_texture, Rect2(Vector2.ZERO, size), false)
 	for landmark in arena.known_landmarks():
 		var p = landmark.p * scale_xy
-		var color = Color("68e6a0") if landmark.kind == "old" else Color("f2c867")
+		var color = Color("54caff") if landmark.kind == "old" else Color("8de4ff")
 		if landmark.used:
 			color = color.darkened(0.35)
-		var sides = 3 if landmark.kind == "old" else 6
+		var sides = 3 if landmark.kind == "old" else 4
 		var points = PackedVector2Array()
 		for i in sides:
-			points.append(p + Vector2.from_angle(TAU * i / sides - PI / 2) * 5)
+			points.append(p + Vector2.from_angle(TAU * i / sides - (PI / 2 if sides == 3 else PI / 4)) * 5)
 		draw_circle(p, 7, Color(0.015, 0.025, 0.035, 0.95))
 		points.append(points[0])
 		draw_polyline(points, color, 1.5, true)

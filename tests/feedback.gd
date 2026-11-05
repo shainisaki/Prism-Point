@@ -73,8 +73,17 @@ func run() -> void:
 	arena.update_objects(1.0)
 	expect(monument.charge == 0 and game.state == "playing", "Standing outside activation pad does not trigger monument")
 	arena.player = center
+	arena.update_objects(0.4)
+	expect(monument.pressed and is_equal_approx(arena.lamp_progress(monument, 0), 0.5) and arena.lamp_progress(monument, 1) == 0, "Pressure plate sends charge from its center toward the first bulb")
+	arena.update_objects(0.4)
+	expect(arena.lamp_progress(monument, 0) == 1 and arena.lamp_progress(monument, 1) == 0, "First bulb lights only when its connecting line is charged")
+	arena.player = center + Vector2(90, 0)
+	arena.update_objects(0.1)
+	expect(not monument.pressed and monument.charge < 0.8, "Stepping off the actual plate stops and drains the charging circuit")
+	arena.player = center
 	arena.update_objects(2.4)
 	expect(game.state == "monument", "Entering monument and standing on pad opens choices")
+	expect(arena.lamp_progress(monument, 2) == 1, "All three bulbs are fully powered when the module completes")
 	game.ui.buttons.choice_0.pressed.emit()
 	expect(game.state == "playing", "Monument choice resumes run")
 
@@ -146,12 +155,28 @@ func run() -> void:
 	var points_before_monument = game.points
 	var stats_before = game.stats.duplicate()
 	for i in 5:
-		arena.player = landmark_p + Vector2.from_angle(TAU * i / 6) * 135
+		arena.player = arena.data_field_position(rune_monument, i)
 		arena.update_objects(0.01)
-	expect(rune_monument.activated.size() == 5 and not rune_monument.used, "Rune monument requires all six walk-over stones")
-	arena.player = landmark_p + Vector2.from_angle(TAU * 5 / 6) * 135
+	expect(rune_monument.activated.size() == 5 and not rune_monument.used, "Data chip requires all six walk-over fields")
+	expect(arena.data_field_position(rune_monument, 0).distance_to(landmark_p) == 240, "Decryption fields are farther from the chip")
+	expect(rune_monument.bits.size() > 0 and rune_monument.bits[0].alpha < 1, "Activated fields emit softly appearing binary digits")
+	var only_binary = true
+	for bit in rune_monument.bits: only_binary = only_binary and bit.digit in ["0", "1"]
+	expect(only_binary, "Field particles contain only zeros and ones")
+	arena.player = arena.data_field_position(rune_monument, 5)
 	arena.update_objects(0.01)
-	expect(rune_monument.used and game.stats != stats_before and game.points == points_before_monument, "Sixth rune stone activates the original stat-bonus reward")
+	expect(rune_monument.decoding and not rune_monument.used and game.stats == stats_before, "Sixth field starts transfer before granting the reward")
+	var total_distance = 0.0
+	for bit in rune_monument.bits: total_distance += bit.p.distance_to(landmark_p)
+	arena.update_objects(0.6)
+	var transferred_distance = 0.0
+	for bit in rune_monument.bits: transferred_distance += bit.p.distance_to(landmark_p)
+	expect(transferred_distance < total_distance and not rune_monument.used, "Binary digits fly inward during the visible transfer")
+	arena.update_objects(0.61)
+	expect(rune_monument.used and game.stats != stats_before and game.points == points_before_monument, "Finished transfer releases the original stat-bonus reward")
+	var stats_after = game.stats.duplicate()
+	arena.update_objects(3.0)
+	expect(game.stats == stats_after and rune_monument.bits.is_empty(), "Decoded chip pays out once and cleans up its binary particles")
 	var active_marker = false
 	for marker in arena.known_landmarks():
 		if marker.kind == "monument": active_marker = marker.used

@@ -50,17 +50,17 @@ Pause, Timer, Shop, Upgrades, Wellenwechsel, Unverwundbarkeit, Hardcore,
 Boss Rush, alle Boss-Arten, Gold, Freischaltungen, Spielstand-Roundtrip,
 Time Attack, Optionen, Kompendium und Simulation der Wellen 6/10/20/25.
 Laufzeitdiagnosen werden zusätzlich zum Exitcode ausgewertet.
-Die 52 Basis-Checks werden durch `tests/feedback.gd` um 59 Regressionen
+Die 52 Basis-Checks werden durch `tests/feedback.gd` um 69 Regressionen
 erweitert: Monument-Wände und Eingänge auch für den Tank, Aktivierung von innen,
 Sichtbereichsaufdeckung und Erinnern/Zurücksetzen der Minikarte, versteckte
 Nebel-HUDs und nutzbare Pause, ausschließlich dort angezeigte Statuswerte,
 nummerierte Combo-Popups, Herzen und HP-Übernahme, Rollanimation,
 2000/240 Endboss-HP sowie acht unterschiedliche, begehbare Kartenlayouts.
-Aktuelles Gesamtergebnis mit Godot 4.6.3: 111 Checks bestanden, keine
+Aktuelles Gesamtergebnis mit Godot 4.6.3: 121 Checks bestanden, keine
 Engine-/Scriptfehler. Bilder und Änderungen: [Gameplay-Update](GAMEPLAY_UPDATE.md).
 Die neue UI-Kombination und kleine Fenstergrößen: [UI-Update](UI_UPDATE.md).
 
-`tests/render.gd` rendert zusätzlich das große Monument mit grünen Flammen,
+`tests/render.gd` rendert zusätzlich das technische Schaltmodul mit blauen Glühbirnen,
 zwei Rollphasen des Fassbosses, flächigen Nebel, die Pausen-Statusübersicht
 und Combo-Popups/Herzen mit echtem OpenGL-Renderer für die Sichtprüfung.
 Headless-Tests allein belegen keine korrekte Darstellung.
@@ -68,3 +68,6 @@ Titel, Lobby, Arena, Shop und Optionen wurden mit OpenGL/llvmpipe gerendert
 und visuell geprüft. Ein exportiertes PCK wurde aus `/tmp` ohne Zugriff auf
 das Projektverzeichnis gestartet; Einstieg und drei Sekunden Spielsimulation
 liefen erfolgreich. Vollständige Desktop-Binaries sind noch nicht geprüft.
+
+Die aktuelle technische Ausführung mit Druckplatte, Datenchip und Schaltkreis-Boden
+ist im [Elektronik-Update](TECH_UPDATE.md) beschrieben.

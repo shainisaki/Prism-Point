@@ -3,6 +3,9 @@ extends Node2D
 
 const SIZE = Vector2(6000, 4500)
 const Layout = preload("res://scripts/arena_layout.gd")
+const TechArt = preload("res://scripts/tech_monuments.gd")
+const DATA_FIELD_DISTANCE = 240.0
+const DATA_DOWNLOAD_TIME = 1.2
 const HEART_DROP_CHANCE = 0.08
 const MONUMENT_RADIUS = 360.0
 const MONUMENT_WALL_WIDTH = 32.0
@@ -58,12 +61,12 @@ var floor_surface: ColorRect
 
 func _ready() -> void:
 	floor_surface = ColorRect.new()
-	floor_surface.name = "StoneFloor"
+	floor_surface.name = "CircuitFloor"
 	floor_surface.size = SIZE
 	floor_surface.z_index = -10
 	floor_surface.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var surface_material = ShaderMaterial.new()
-	surface_material.shader = preload("res://shaders/stone_floor.gdshader")
+	surface_material.shader = preload("res://shaders/circuit_floor.gdshader")
 	surface_material.set_shader_parameter("world_size", SIZE)
 	floor_surface.material = surface_material
 	add_child(floor_surface)
@@ -175,17 +178,7 @@ func generate_wave() -> void:
 		if randf() < 0.7:
 			place_crystal()
 		if randf() < 0.7:
-			var p = random_open(400)
-			# Satellites must also be reachable and unobstructed.
-			for attempt in 60:
-				var clear = true
-				for i in 6:
-					if blocked(p + Vector2.from_angle(TAU * i / 6.0) * 135, 40):
-						clear = false
-				if clear:
-					break
-				p = random_open(400)
-			objects.append({"kind": "monument", "p": p, "r": 35.0, "activated": [], "used": false})
+			place_data_chip()
 		objects.append({"kind": "switch", "p": random_open(300), "r": 20.0, "used": false})
 		if game.modifier == "elite":
 			spawn_boss(BOSS_KINDS.pick_random(), true)
@@ -219,6 +212,37 @@ func known_landmarks() -> Array[Dictionary]:
 			result.append({"kind": object.kind, "p": object.p, "used": object.used})
 	return result
 
+func data_field_position(object: Dictionary, index: int) -> Vector2:
+	return object.p + Vector2.from_angle(TAU * index / 6) * DATA_FIELD_DISTANCE
+
+func place_data_chip() -> bool:
+	for attempt in 100:
+		var chip = {"kind": "monument", "p": random_open(400), "r": 45.0, "activated": [], "used": false}
+		var clear = true
+		for i in 6:
+			var p = data_field_position(chip, i)
+			if p.x < 65 or p.y < 65 or p.x > SIZE.x - 65 or p.y > SIZE.y - 65 or blocked(p, 50):
+				clear = false
+				break
+			if grid.get_point_path(closest_cell(chip.p), closest_cell(p)).is_empty():
+				clear = false
+				break
+			for other in objects:
+				if p.distance_to(other.p) < (MONUMENT_RADIUS + 80 if other.kind == "old" else other.r + 45): clear = false
+			for hazard in hazards:
+				if hazard.grow(40).has_point(p): clear = false
+		if clear:
+			objects.append(chip)
+			return true
+	return false
+
+func lamp_position(object: Dictionary, index: int) -> Vector2:
+	return polygon(object.p, object.get("radius", MONUMENT_RADIUS), 3, -PI / 2)[index].lerp(object.p, 0.18)
+
+func lamp_progress(object: Dictionary, index: int) -> float:
+	if object.used: return 1.0
+	return clampf(object.charge / 0.8 - index, 0.0, 1.0)
+
 func place_old_monument() -> void:
 	var center = Vector2(randf_range(650, SIZE.x - 650), randf_range(650, SIZE.y - 650))
 	var footprint = Rect2(center - Vector2.ONE * (MONUMENT_RADIUS + 130), Vector2.ONE * (MONUMENT_RADIUS + 130) * 2)
@@ -226,7 +250,7 @@ func place_old_monument() -> void:
 	for i in range(walls.size() - 1, 3, -1):
 		if walls[i].intersects(footprint):
 			walls.remove_at(i)
-	var object = {"kind": "old", "p": center, "r": 95.0, "radius": MONUMENT_RADIUS, "charge": 0.0, "used": false}
+	var object = {"kind": "old", "p": center, "r": 54.0, "radius": MONUMENT_RADIUS, "charge": 0.0, "used": false}
 	objects.append(object)
 	var vertices = polygon(center, MONUMENT_RADIUS, 3, -PI / 2)
 	for i in 3:
@@ -787,29 +811,73 @@ func update_objects(delta: float) -> void:
 			game.goal_unlocked = true
 			game.ui.toast("Versteckten Schalter gefunden · Shop geöffnet")
 		elif object.kind == "monument":
-			for i in 6:
-				var satellite = object.p + Vector2.from_angle(TAU * i / 6) * 135
-				if not object.activated.has(i) and satellite.distance_to(player) < player_radius + 24:
-					object.activated.append(i)
-					burst(satellite, Color("ffd24a"), 12)
-			if object.activated.size() == 6:
-				object.used = true
-				var key = game.stats.keys().pick_random()
-				apply_stat(key, 1.0 if key in ["vitality", "armor"] else [0.25, 0.5, 0.75].pick_random())
+			update_data_chip(object, delta)
 		elif object.kind == "old":
-			object.charge = clampf(object.charge + delta * (1.0 if player.distance_to(object.p) < object.r else -1.1), 0, 2.4)
+			object.pressed = Rect2(object.p - Vector2(54, 54), Vector2(108, 108)).has_point(player)
+			object.charge = clampf(object.charge + delta * (1.0 if object.pressed else -1.1), 0, 2.4)
 			if object.charge >= 2.4:
 				object.used = true
 				game.state = "monument"
 				release_pointer()
 				game.ui.monument_screen()
 
+func emit_binary(object: Dictionary, index: int, count: int) -> void:
+	var origin = data_field_position(object, index)
+	for i in mini(count, 100 - object.bits.size()):
+		var offset = Vector2.from_angle(randf() * TAU) * randf_range(38, 56)
+		object.bits.append({"p": origin + offset, "origin": origin, "offset": offset,
+			"age": 0.0, "life": randf_range(1.4, 2.1), "digit": str(randi() % 2)})
+
+func update_data_chip(object: Dictionary, delta: float) -> void:
+	if object.used: return
+	if not object.has("bits"): object.bits = []
+	if not object.has("bit_clock"): object.bit_clock = 0.0
+	if not object.has("decoding"): object.decoding = false
+	if object.decoding:
+		object.download += delta
+		for bit in object.bits:
+			var t = clampf((object.download - bit.delay) / (DATA_DOWNLOAD_TIME - bit.delay), 0.0, 1.0)
+			bit.p = bit.start.lerp(object.p, t * t) + (object.p - bit.start).orthogonal().normalized() * sin(t * PI) * 14
+			bit.alpha = smoothstep(0.0, 0.14, object.download) * (1.0 - smoothstep(0.82, 1.0, t))
+		if object.download >= DATA_DOWNLOAD_TIME:
+			object.used = true
+			object.decoding = false
+			object.bits.clear()
+			var key = game.stats.keys().pick_random()
+			apply_stat(key, 1.0 if key in ["vitality", "armor"] else [0.25, 0.5, 0.75].pick_random())
+			burst(object.p, Color("66d7ff"), 24)
+		return
+	for i in 6:
+		var field = data_field_position(object, i)
+		if not object.activated.has(i) and circle_rect(player, player_radius, Rect2(field - Vector2(32, 32), Vector2(64, 64))):
+			object.activated.append(i)
+			emit_binary(object, i, 8)
+	object.bit_clock += delta
+	if object.bit_clock >= 0.24:
+		object.bit_clock = 0.0
+		for index in object.activated: emit_binary(object, index, 1)
+	for i in range(object.bits.size() - 1, -1, -1):
+		var bit = object.bits[i]
+		bit.age += delta
+		bit.p = bit.origin + bit.offset.rotated(bit.age * 0.28) - Vector2(0, bit.age * 8)
+		bit.alpha = smoothstep(0.0, 0.3, bit.age) * smoothstep(0.0, 0.45, bit.life - bit.age)
+		if bit.age >= bit.life: object.bits.remove_at(i)
+	if object.activated.size() == 6:
+		# The reward waits for all visible data packets to reach the chip.
+		object.decoding = true
+		object.download = 0.0
+		for index in 6: emit_binary(object, index, 4)
+		for bit in object.bits:
+			bit.start = bit.p
+			bit.delay = randf_range(0.0, 0.25)
+			bit.alpha = 0.0
+
 func apply_stat(key: String, amount: float) -> void:
 	game.stats[key] = maxf(0, game.stats[key] + amount)
 	if key == "vitality":
 		game.recalculate_health()
 		game.hp = mini(game.max_hp, game.hp + maxi(0, int(amount)))
-	game.ui.toast("Monument: %+.2f %s" % [amount, game.catalog.passive_meta[key].name])
+	game.ui.toast("Systembonus: %+.2f %s" % [amount, game.catalog.passive_meta[key].name])
 
 func burst(p: Vector2, color: Color, count: int) -> void:
 	for i in mini(count, 200 - particles.size()):
@@ -844,15 +912,18 @@ func _draw() -> void:
 		draw_metal_wall(wall)
 	for segment in monument_walls:
 		draw_line(segment.a + Vector2(6, 8), segment.b + Vector2(6, 8), Color(0, 0, 0, 0.5), segment.width + 8, true)
-		draw_line(segment.a, segment.b, Color("56636a"), segment.width, true)
-		draw_line(segment.a, segment.b, Color("85918e"), segment.width - 8, true)
-		draw_line(segment.a, segment.b, Color("424d50"), 3, true)
+		draw_line(segment.a, segment.b, Color("263b48"), segment.width, true)
+		draw_line(segment.a, segment.b, Color("506a79"), segment.width - 6, true)
+		draw_line(segment.a, segment.b, Color("152936"), segment.width - 12, true)
+		for end in [segment.a, segment.b]:
+			draw_circle(end, 4, Color("92a7b2"))
 	var goal_color = Color("5dffc0") if game.goal_unlocked else Color("526476")
 	draw_arc(goal, 36 + sin(game.elapsed * 3) * 3, 0, TAU, 48, Color(goal_color, 0.5), 2, true)
 	draw_colored_polygon(polygon(goal, 22, 6, game.elapsed * 0.4), goal_color)
 	draw_string(ThemeDB.fallback_font, goal + Vector2(-22, -48), "SHOP", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, goal_color)
 	for object in objects:
-		if not visible.grow(MONUMENT_RADIUS if object.kind == "old" else 150).has_point(object.p) or object.get("hp", 1) <= 0:
+		var extent = MONUMENT_RADIUS if object.kind == "old" else (DATA_FIELD_DISTANCE + 80 if object.kind == "monument" else 150)
+		if not visible.grow(extent).has_point(object.p) or object.get("hp", 1) <= 0:
 			continue
 		draw_object(object)
 	for warning in warnings:
@@ -954,34 +1025,12 @@ func draw_object(object: Dictionary) -> void:
 		"crystal":
 			draw_floating_crystal(p)
 		"monument":
-			draw_runestone_monument(object)
+			TechArt.draw_data_chip(self, object)
 		"old":
-			var vertices = polygon(p, object.get("radius", MONUMENT_RADIUS), 3, -PI / 2)
-			for i in 3:
-				var flame = vertices[i].lerp(p, 0.18)
-				draw_circle(flame, 20, Color("272f2c"))
-				draw_arc(flame, 21, 0, TAU, 30, Color("56675d"), 3, true)
-				var amount = clampf((object.charge - i * 0.8) / 0.8, 0.0, 1.0)
-				draw_flame(flame, amount, i * 2.1)
-			draw_arc(p, object.r, 0, TAU, 64, Color("31483c"), 3, true)
-			draw_arc(p, object.r, -PI / 2, -PI / 2 + TAU * maxf(0.001, object.charge / 2.4), 64, Color("70ffa1"), 4, true)
-			if not object.used:
-				draw_string(ThemeDB.fallback_font, p + Vector2(-62, 5), "AKTIVIEREN", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("95bca0"))
+			TechArt.draw_pressure_module(self, object)
 		"switch":
 			if object.used:
 				draw_circle(p, 15, Color("4dff8a"))
-
-func draw_flame(p: Vector2, amount: float, phase: float) -> void:
-	# A small green pilot flame grows into a full, animated tongue of fire.
-	var height = lerpf(16, 70, amount)
-	var time = game.elapsed * 7 + phase
-	var sway = sin(time) * 7
-	var outline = PackedVector2Array([p + Vector2(-15, 0), p + Vector2(-18, -height * 0.3), p + Vector2(-9 + sway * 0.4, -height * 0.65), p + Vector2(sway, -height), p + Vector2(10, -height * 0.5), p + Vector2(18, -height * 0.28), p + Vector2(14, 0)])
-	draw_circle(p - Vector2(0, height * 0.3), height * 0.7, Color(0.15, 1.0, 0.38, 0.07 + amount * 0.06))
-	draw_colored_polygon(outline, Color("22b85e"))
-	var inner = PackedVector2Array([p + Vector2(-10, -2), p + Vector2(-8, -height * 0.3), p + Vector2(sway * 0.4, -height * 0.72), p + Vector2(10, -height * 0.25), p + Vector2(9, -2)])
-	draw_colored_polygon(inner, Color("77ff9b"))
-	draw_colored_polygon(PackedVector2Array([p + Vector2(-5, -2), p + Vector2(0, -height * 0.4), p + Vector2(5, -2)]), Color("ceffe0"))
 
 func draw_ground_shadow(p: Vector2, width: float, depth: float) -> void:
 	for i in 3:
@@ -1002,37 +1051,6 @@ func draw_floating_crystal(p: Vector2) -> void:
 		points[i] += p - Vector2(0, bob)
 	var uv = PackedVector2Array([Vector2(0.5, 0.058), Vector2(0.772, 0.344), Vector2(0.772, 0.645), Vector2(0.5, 0.914), Vector2(0.228, 0.645), Vector2(0.228, 0.344)])
 	draw_polygon(points, PackedColorArray([Color.WHITE]), uv, crystal_texture)
-
-func draw_runestone_monument(object: Dictionary) -> void:
-	var p = object.p
-	var ink = Color("f1c66b") if object.used else Color("947c50")
-	# Six walk-over rune stones still power the central obelisk, one at a time.
-	draw_ground_shadow(p + Vector2(7, 16), 52, 16)
-	draw_circle(p, 44, Color("28353a"))
-	draw_arc(p, 44, 0, TAU, 48, Color("617174"), 3, true)
-	for i in 6:
-		var a = TAU * i / 6
-		var satellite = p + Vector2.from_angle(a) * 135
-		var active = object.activated.has(i)
-		var rune_color = Color("ffdd83") if active else Color("796e55")
-		draw_line(p + Vector2.from_angle(a) * 46, satellite, Color(rune_color, 0.34 if active else 0.12), 2, true)
-		draw_ground_shadow(satellite + Vector2(4, 12), 23, 9)
-		var stone = PackedVector2Array([satellite + Vector2(-20, 8), satellite + Vector2(-18, -16), satellite + Vector2(-8, -23), satellite + Vector2(17, -19), satellite + Vector2(21, 7), satellite + Vector2(10, 14)])
-		draw_colored_polygon(stone, Color("394a4d"))
-		stone.append(stone[0])
-		draw_polyline(stone, Color("758380"), 2, true)
-		draw_line(satellite + Vector2(-11, 8), satellite + Vector2(-11, -15), Color("1d2b30"), 3)
-		draw_line(satellite + Vector2(0, -12), satellite + Vector2(0, 7), rune_color, 3, true)
-		draw_line(satellite + Vector2(-7, -6), satellite + Vector2(7, -6), rune_color, 2, true)
-		if active:
-			draw_circle(satellite + Vector2(0, -6), 12, Color(1, 0.76, 0.3, 0.07))
-	# An asymmetric carved obelisk, with differently lit stone faces and a cap.
-	draw_colored_polygon(PackedVector2Array([p + Vector2(-20, 13), p + Vector2(-17, -45), p + Vector2(-4, -65), p + Vector2(15, -47), p + Vector2(22, 12), p + Vector2(0, 24)]), Color("526466"))
-	draw_colored_polygon(PackedVector2Array([p + Vector2(-4, -65), p + Vector2(-1, 15), p + Vector2(0, 24), p + Vector2(22, 12), p + Vector2(15, -47)]), Color("2c3b40"))
-	draw_line(p + Vector2(-17, -43), p + Vector2(-19, 9), Color("94a5a0"), 2, true)
-	draw_line(p + Vector2(-4, -38), p + Vector2(-4, 4), ink, 3, true)
-	for y in [-29, -15, -2]:
-		draw_line(p + Vector2(-11, y), p + Vector2(6, y - 5), ink, 2, true)
 
 func draw_heart(p: Vector2) -> void:
 	var points = PackedVector2Array()
