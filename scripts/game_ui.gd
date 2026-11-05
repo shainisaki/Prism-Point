@@ -287,6 +287,7 @@ func _menu(title: String, subtitle: String = "") -> VBoxContainer:
 	overlay.add_child(margin)
 	var scroll = ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.follow_focus = true
 	margin.add_child(scroll)
 	var box = VBoxContainer.new()
 	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -337,12 +338,13 @@ func title_screen() -> void:
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	panel.add_child(label)
 	_button(panel, "SPIELEN   →", game.show_hub, "title_play")
+	_button(panel, "Spiel beenden", get_tree().quit, "quit_game")
 	var hint = _label("Enter / Leertaste / A zum Fortfahren", 14, Color("c3d0de"))
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	panel.add_child(hint)
 	_focus_first()
 
-func hub_screen() -> void:
+func hub_screen(focus_id: String = "") -> void:
 	var box = _menu("Dein nächster Run", "Gold bleibt zwischen Runs erhalten. Der erste Upgrade-Kauf bestimmt deinen Build.")
 	_text(box, "GOLD  %d     /     BESTE WELLE  %d     /     MAX. COMBO  %d" % [game.store.data.gold, game.store.data.best_waves, game.store.data.max_combo], 17, Color("ffd24a"))
 	_text(box, "01  /  SPIELMODUS", 14, ACCENT)
@@ -355,7 +357,7 @@ func hub_screen() -> void:
 		var mode_id = str(id)
 		var entry = game.catalog.modes[id]
 		var button = _button(modes, ("●  " if game.mode == id else "") + entry.name + "\n" + entry.tag,
-			func(): game.mode = mode_id; hub_screen(), "mode_" + id)
+			func(): game.mode = mode_id; hub_screen("mode_" + mode_id), "mode_" + id)
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.add_theme_font_size_override("font_size", 15)
 	_text(box, "02  /  CHARAKTER", 14, ACCENT)
@@ -371,7 +373,7 @@ func hub_screen() -> void:
 		var status = "AUSGEWÄHLT" if game.selected_character == id else ("Verfügbar" if unlocked else ("Combo 1000" if id == "sniper" else "%d Gold · Freischalten" % c.cost))
 		var button = _button(chars, c.name + "\n" + c.tag + "\n\n" + status,
 			func():
-				if game.choose_character(char_id): hub_screen()
+				if game.choose_character(char_id): hub_screen("char_" + char_id)
 				else: toast("Noch nicht freigeschaltet · Gold oder Combo-Voraussetzung fehlt"), "char_" + id)
 		button.custom_minimum_size.y = 150
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -383,8 +385,12 @@ func hub_screen() -> void:
 	start.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_button(row, "Kompendium", compendium_screen, "compendium")
 	_button(row, "Optionen", func(): open_options("hub"), "options")
+	_button(box, "Spiel beenden", get_tree().quit, "quit_game")
 	_text(box, "WASD / Pfeile / linker Stick: bewegen   ·   Schießen: automatisch   ·   P / Esc / Start: Pause\nShift / X: Dash ab Tempo-Level 10   ·   Maus oder Touch: ziehen   ·   F11: Vollbild", 14)
-	_focus_first()
+	if buttons.has(focus_id):
+		buttons[focus_id].call_deferred("grab_focus")
+	else:
+		_focus_first()
 
 func play_screen() -> void:
 	_clear()
@@ -430,6 +436,7 @@ func pause_screen() -> void:
 	resume.add_theme_stylebox_override("normal", _style(Color("153c48"), ACCENT, 10, 14))
 	_button(run, "Run neu starten", request_restart, "restart")
 	_button(run, "Zur Charakterauswahl", game.show_hub, "quit_run")
+	_button(run, "Spiel beenden", get_tree().quit, "quit_game")
 	var modules = _pause_panel(panels, "EINSTELLUNGEN & INFORMATIONEN")
 	var cards = GridContainer.new()
 	cards.columns = 2
